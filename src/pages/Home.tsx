@@ -232,7 +232,7 @@ const Home: React.FC = () => {
             className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
             onClick={handleToggleRecording}
           >
-            <Sparkles className="h-16 w-16" />
+            <Sparkles className="h-32 w-32" /> {/* Changed icon size to match button */}
           </Button>
         )}
       </div>
