@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Mic, StopCircle } from 'lucide-react';
+import { Star, StopCircle } from 'lucide-react'; // Changed Mic to Star
 import AudioVisualizer from '@/components/AudioVisualizer';
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const [isRecordingUser, setIsRecordingUser] = useState(false);
   const [isSpeakingAI, setIsSpeakingAI] = useState(false);
+  const [isThinkingAI, setIsThinkingAI] = useState(false); // New state for AI thinking
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
   const finalTranscriptionRef = useRef<string>('');
@@ -17,16 +18,16 @@ const Home: React.FC = () => {
 
   // Function to start speech recognition
   const startRecognition = useCallback(() => {
-    if (recognitionRef.current && !isRecordingUser && !isSpeakingAI) {
+    if (recognitionRef.current && !isRecordingUser && !isSpeakingAI && !isThinkingAI) {
       try {
         recognitionRef.current.start();
       } catch (error) {
         console.error("Error starting speech recognition:", error);
-        toast.error("Failed to start voice input. Please tap the mic button.");
+        toast.error("Failed to start voice input. Please tap the star button.");
         setIsRecordingUser(false);
       }
     }
-  }, [isRecordingUser, isSpeakingAI]);
+  }, [isRecordingUser, isSpeakingAI, isThinkingAI]);
 
   // Function to play audio and then automatically start recognition
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
@@ -40,10 +41,8 @@ const Home: React.FC = () => {
         // Audio started playing successfully, nothing to do here yet.
         // The onended/onerror handlers will manage the next state.
       }).catch(e => {
-        // This catch block handles immediate rejections of the play() promise.
-        // It does NOT mean the audio element's onerror will fire.
         console.error("Error attempting to play audio:", e);
-        toast.error(`Audio playback failed: ${e.message}. You may need to tap the mic button to start.`);
+        toast.error(`Audio playback failed: ${e.message}. You may need to tap the star button to start.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
         startRecognition(); // Try to start recognition even if audio fails
@@ -115,7 +114,7 @@ const Home: React.FC = () => {
         recognitionRef.current?.start();
       } catch (err) {
         console.error("Error restarting recognition after error:", err);
-        toast.error("Failed to automatically restart voice input. Please tap the mic button.");
+        toast.error("Failed to automatically restart voice input. Please tap the star button.");
       }
     };
 
@@ -133,7 +132,7 @@ const Home: React.FC = () => {
           recognitionRef.current?.start();
         } catch (e) {
           console.error("Error automatically starting speech recognition after no speech detected:", e);
-          toast.error("Failed to automatically restart voice input. Please tap the mic button.");
+          toast.error("Failed to automatically restart voice input. Please tap the star button.");
         }
       }
       finalTranscriptionRef.current = '';
@@ -147,25 +146,22 @@ const Home: React.FC = () => {
     };
   }, []); // No dependencies, runs once on mount
 
-  // No initial greeting or auto-start on load. User must click the mic button.
-  // The useEffect for initial conversation has been removed.
-
   const handleToggleRecording = () => {
-    if (isSpeakingAI) {
+    if (isSpeakingAI || isThinkingAI) { // Disable button if AI is speaking or thinking
       return;
     }
 
     if (isRecordingUser) {
-      // If currently recording, stop it. This case should ideally not be reached if button is hidden.
       recognitionRef.current?.stop();
     } else {
-      // If not recording, start it.
       startRecognition();
     }
   };
 
   const handleTranscriptionComplete = async (text: string) => {
-    const loadingToastId = toast.loading("Thinking...");
+    setIsThinkingAI(true); // Set thinking state
+    setCurrentInterimText(''); // Clear current text
+    setAiResponseText(''); // Clear AI response text
 
     try {
       // 1. Call Gemini AI Edge Function
@@ -210,51 +206,50 @@ const Home: React.FC = () => {
         }
       }
 
-      toast.dismiss(loadingToastId);
       toast.success("AI response received!");
 
     } catch (error: any) {
       console.error('Error interacting with AI or TTS:', error);
-      toast.dismiss(loadingToastId);
       toast.error(`Failed to get AI response: ${error.message}`);
       setIsSpeakingAI(false); // Ensure AI speaking state is reset on error
       setAiResponseText(''); // Clear AI text on error
       startRecognition(); // Attempt to start recognition even if AI interaction fails
+    } finally {
+      setIsThinkingAI(false); // Always set thinking state to false after process
     }
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
-      {/* Live transcription text or AI response text in the center */}
-      <div className="flex-grow flex items-center justify-center w-full max-w-3xl px-4 overflow-y-auto max-h-[calc(100vh-200px)]">
-        {(currentInterimText || aiResponseText) && (
-          <p className="text-3xl font-semibold text-gray-300 text-center">
-            {currentInterimText || aiResponseText}
+    <div className="fixed inset-0 flex items-center justify-center bg-gray-900 text-white p-4">
+      <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4">
+        {/* Live transcription text, AI response text, or Thinking text */}
+        {(currentInterimText || aiResponseText || isThinkingAI) && (
+          <p className="text-3xl font-semibold text-gray-300 text-center mb-8">
+            {isThinkingAI ? "Thinking..." : (currentInterimText || aiResponseText)}
           </p>
         )}
-      </div>
 
-      {/* Microphone button and visualizer */}
-      <div className="relative flex flex-col items-center justify-center mb-8">
-        {(isRecordingUser || isSpeakingAI) && (
-          <AudioVisualizer isAnimating={true} className="absolute inset-0 m-auto h-40 w-40" />
-        )}
-        {/* Only show the mic button when neither recording nor speaking */}
-        {!isRecordingUser && !isSpeakingAI && (
-          <Button
-            variant="default"
-            size="icon"
-            className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
-            onClick={handleToggleRecording}
-          >
-            <Mic className="h-12 w-12" />
-          </Button>
-        )}
-        <p className="text-sm text-gray-400 mt-4">
-          {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : "Tap to speak")}
-        </p>
+        {/* Microphone button and visualizer */}
+        <div className="relative flex flex-col items-center justify-center">
+          {(isRecordingUser || isSpeakingAI || isThinkingAI) && (
+            <AudioVisualizer isAnimating={true} className="absolute inset-0 m-auto h-40 w-40" />
+          )}
+          {/* Only show the button when neither recording, speaking, nor thinking */}
+          {!isRecordingUser && !isSpeakingAI && !isThinkingAI && (
+            <Button
+              variant="default"
+              size="icon"
+              className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
+              onClick={handleToggleRecording}
+            >
+              <Star className="h-12 w-12" />
+            </Button>
+          )}
+          <p className="text-sm text-gray-400 mt-4">
+            {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : (isThinkingAI ? "AI is thinking..." : "Tap to speak"))}
+          </p>
+        </div>
       </div>
-
       <audio ref={audioRef} className="hidden" />
     </div>
   );
