@@ -32,7 +32,7 @@ const Home: React.FC = () => {
   }, [isVoiceLoopActive]);
 
   // Timeout for Web Speech API to prevent it from getting stuck
-  const SPEECH_TIMEOUT_MS = 30000; // 30 seconds
+  const SPEECH_TIMEOUT_MS = 120000; // Increased to 120 seconds (2 minutes)
   const speechTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Helper function to cancel any ongoing speech (browser or audio element)
