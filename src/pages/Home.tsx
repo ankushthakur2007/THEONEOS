@@ -26,7 +26,8 @@ const Home: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
 
-    recognition.continuous = true;
+    // Key change: Set continuous to false for single utterance mode
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -64,6 +65,7 @@ const Home: React.FC = () => {
     };
 
     recognition.onend = () => {
+      // This fires when recognition stops, either manually or automatically after speech ends (due to continuous=false)
       setIsRecordingUser(false);
       const finalTranscribedText = finalTranscriptionRef.current.trim();
       if (finalTranscribedText) {
@@ -83,17 +85,24 @@ const Home: React.FC = () => {
     };
   }, []);
 
-  const handleStartRecording = () => {
-    if (recognitionRef.current && !isRecordingUser && !isSpeakingAI) {
+  const handleToggleRecording = () => {
+    if (isSpeakingAI) {
+      // Cannot record while AI is speaking
+      return;
+    }
+
+    if (isRecordingUser) {
+      // If currently recording, stop it manually
+      recognitionRef.current?.stop();
+    } else {
+      // If not recording, start it
       try {
-        recognitionRef.current.start();
+        recognitionRef.current?.start();
       } catch (error) {
         console.error("Error starting speech recognition:", error);
         toast.error("Failed to start voice input. Ensure microphone is connected and permissions are granted.");
         setIsRecordingUser(false);
       }
-    } else if (isRecordingUser) {
-      recognitionRef.current?.stop();
     }
   };
 
@@ -201,7 +210,7 @@ const Home: React.FC = () => {
           className={`w-24 h-24 rounded-full transition-all duration-300 relative z-10
             ${isRecordingUser ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'}
             ${isSpeakingAI ? 'opacity-50 cursor-not-allowed' : ''}`}
-          onClick={handleStartRecording}
+          onClick={handleToggleRecording}
           disabled={isSpeakingAI}
         >
           {isRecordingUser ? (
