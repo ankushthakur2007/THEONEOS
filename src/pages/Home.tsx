@@ -362,23 +362,26 @@ const Home: React.FC = () => {
   // Initialize Speech Recognition (this useEffect should only run once for setup)
   useEffect(() => {
     const initializeSpeechRecognition = () => {
-      // Check for browser support
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      if (typeof window === 'undefined') {
+        console.warn("Window object not available, skipping SpeechRecognition initialization.");
+        return;
+      }
+
+      let SpeechRecognitionConstructor: typeof SpeechRecognition | undefined;
+
+      if (typeof window.SpeechRecognition === 'function') {
+        SpeechRecognitionConstructor = window.SpeechRecognition;
+      } else if (typeof (window as any).webkitSpeechRecognition === 'function') {
+        SpeechRecognitionConstructor = (window as any).webkitSpeechRecognition;
+      }
+
+      if (!SpeechRecognitionConstructor) {
+        console.error("Speech recognition API not found or not a valid constructor.");
         toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
         return;
       }
 
-      // Get the SpeechRecognition constructor
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-      // If for some reason it's still not a function (e.g., null, undefined, or not a constructor)
-      if (typeof SpeechRecognition !== 'function') {
-        console.error("SpeechRecognition API found but is not a valid constructor.");
-        toast.error("Voice input API is not fully functional in your browser.");
-        return;
-      }
-
-      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current = new SpeechRecognitionConstructor();
       const recognition = recognitionRef.current;
 
       recognition.continuous = false;
