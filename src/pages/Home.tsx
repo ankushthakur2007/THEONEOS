@@ -10,7 +10,7 @@ const Home: React.FC = () => {
   const [isRecordingUser, setIsRecordingUser] = useState(false);
   const [isSpeakingAI, setIsSpeakingAI] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
-  const [aiResponseText, setAiResponseText] = useState(''); // New state for AI response text
+  const [aiResponseText, setAiResponseText] = useState('');
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -26,15 +26,14 @@ const Home: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
 
-    // Key change: Set continuous to false for single utterance mode
-    recognition.continuous = false;
+    recognition.continuous = false; // Still false for single utterance
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
       setIsRecordingUser(true);
       setCurrentInterimText('');
-      setAiResponseText(''); // Clear AI text when user starts speaking
+      setAiResponseText('');
       finalTranscriptionRef.current = '';
       toast.info("Listening...");
     };
@@ -61,18 +60,30 @@ const Home: React.FC = () => {
       setIsRecordingUser(false);
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
-      setAiResponseText(''); // Clear AI text on error
+      setAiResponseText('');
+      // If an error occurs, try to restart listening for user input
+      try {
+        recognitionRef.current?.start();
+      } catch (err) {
+        console.error("Error restarting recognition after error:", err);
+      }
     };
 
     recognition.onend = () => {
-      // This fires when recognition stops, either manually or automatically after speech ends (due to continuous=false)
       setIsRecordingUser(false);
       const finalTranscribedText = finalTranscriptionRef.current.trim();
       if (finalTranscribedText) {
         handleTranscriptionComplete(finalTranscribedText);
       } else {
         toast.info("No speech detected.");
-        setCurrentInterimText(''); // Clear interim text if no speech
+        setCurrentInterimText('');
+        // If no speech detected, automatically start listening again for user input
+        try {
+          recognitionRef.current?.start();
+        } catch (e) {
+          console.error("Error automatically starting speech recognition after no speech detected:", e);
+          toast.error("Failed to automatically restart voice input. Please tap the mic button.");
+        }
       }
       finalTranscriptionRef.current = '';
     };
@@ -110,22 +121,43 @@ const Home: React.FC = () => {
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
       setIsSpeakingAI(true);
-      setAiResponseText(aiText); // Set AI text to display
-      setCurrentInterimText(''); // Clear user interim text
+      setAiResponseText(aiText);
+      setCurrentInterimText('');
 
       audioRef.current.play().catch(e => {
         console.error("Error playing audio:", e);
         toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
         setIsSpeakingAI(false);
-        setAiResponseText(''); // Clear AI text on error
+        setAiResponseText('');
+        // If audio fails, try to restart listening for user input
+        try {
+          recognitionRef.current?.start();
+        } catch (err) {
+          console.error("Error restarting recognition after audio error:", err);
+        }
       });
+
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
-        setAiResponseText(''); // Clear AI text after audio finishes
+        setAiResponseText('');
+        // Automatically start listening for user input after AI finishes speaking
+        try {
+          recognitionRef.current?.start();
+        } catch (e) {
+          console.error("Error automatically starting speech recognition after AI speech:", e);
+          toast.error("Failed to automatically restart voice input. Please tap the mic button.");
+        }
       };
+
       audioRef.current.onerror = () => {
         setIsSpeakingAI(false);
-        setAiResponseText(''); // Clear AI text on error
+        setAiResponseText('');
+        // If audio fails, try to restart listening for user input
+        try {
+          recognitionRef.current?.start();
+        } catch (err) {
+          console.error("Error restarting recognition after audio error:", err);
+        }
       };
     }
   };
@@ -185,6 +217,13 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}`);
       setIsSpeakingAI(false); // Ensure AI speaking state is reset on error
       setAiResponseText(''); // Clear AI text on error
+      // Also try to restart listening for user input if an error occurs
+      try {
+        recognitionRef.current?.start();
+      } catch (e) {
+        console.error("Error automatically starting speech recognition after AI interaction error:", e);
+        toast.error("Failed to automatically restart voice input. Please tap the mic button.");
+      }
     }
   };
 
