@@ -174,7 +174,7 @@ const Home: React.FC = () => {
   // Function to handle transcription completion and AI interaction
   const processUserSpeech = useCallback(async (text: string) => {
     setIsThinkingAI(true);
-    setCurrentInterimText('');
+    setCurrentInterimText(''); // Corrected typo here
     setAiResponseText('');
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
@@ -290,7 +290,7 @@ const Home: React.FC = () => {
         startRecognition();
       }
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterterimText, setAiResponseText, startRecognition, messages]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages]);
 
   // Stable SpeechRecognition event handlers
   const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
