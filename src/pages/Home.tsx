@@ -40,11 +40,12 @@ const Home: React.FC = () => {
       try {
         cancelSpeech(); // Ensure any previous speech is stopped before listening
         recognitionRef.current.start();
+        toast.info("Listening..."); // Show toast when recognition actually starts
       } catch (error) {
         console.error("Error starting speech recognition:", error);
         toast.error("Failed to start voice input. Please tap the sparkle button.");
         setIsRecordingUser(false);
-        setIsVoiceLoopActive(false); // Stop loop on recognition start error (e.g., if recognition object is somehow invalid)
+        setIsVoiceLoopActive(false); // Stop loop on recognition start error
       }
     } else {
       console.warn("SpeechRecognition object not initialized.");
@@ -240,7 +241,22 @@ const Home: React.FC = () => {
     }
   }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages, isVoiceLoopActive]);
 
-  // Initialize Speech Recognition
+  // Effect to manage the voice loop: starts recognition when active, stops when inactive
+  useEffect(() => {
+    if (isVoiceLoopActive) {
+      startRecognition();
+    } else {
+      // When loop is deactivated, ensure recognition is stopped
+      recognitionRef.current?.stop();
+      setIsRecordingUser(false);
+      setIsSpeakingAI(false);
+      setIsThinkingAI(false);
+      setCurrentInterimText('');
+      setAiResponseText('');
+    }
+  }, [isVoiceLoopActive, startRecognition]);
+
+  // Initialize Speech Recognition (this useEffect should only run once for setup)
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
@@ -261,7 +277,6 @@ const Home: React.FC = () => {
       setCurrentInterimText('');
       setAiResponseText('');
       finalTranscriptionRef.current = '';
-      toast.info("Listening...");
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -293,11 +308,15 @@ const Home: React.FC = () => {
       } else {
         // For 'no-speech' or other non-critical errors, attempt to restart if loop is active
         toast.info(`Speech recognition error: ${event.error}. Listening again...`);
-        if (isVoiceLoopActive) {
-          startRecognition();
-        } else {
-          toast.info("Voice loop stopped.");
-        }
+        // Use a functional update for isVoiceLoopActive to get the latest state
+        setIsVoiceLoopActive(prev => {
+          if (prev) {
+            startRecognition();
+            return prev; // Keep active
+          }
+          toast.info("Voice loop stopped."); // Inform user if loop was stopped due to no speech
+          return false; // Set to inactive
+        });
       }
     };
 
@@ -310,11 +329,15 @@ const Home: React.FC = () => {
       } else {
         toast.info("No speech detected.");
         setCurrentInterimText('');
-        if (isVoiceLoopActive) { // If no speech, go back to listening state, if loop is active
-          startRecognition();
-        } else {
+        // Use a functional update for isVoiceLoopActive to get the latest state
+        setIsVoiceLoopActive(prev => {
+          if (prev) {
+            startRecognition();
+            return prev; // Keep active
+          }
           toast.info("Voice loop stopped."); // Inform user if loop was stopped due to no speech
-        }
+          return false; // Set to inactive
+        });
       }
       finalTranscriptionRef.current = '';
     };
@@ -325,26 +348,19 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, [processUserSpeech, startRecognition, isVoiceLoopActive]); // Add isVoiceLoopActive to dependencies
+  }, [processUserSpeech, startRecognition]); // Removed isVoiceLoopActive from this dependency array
 
   // Function to start the voice loop
   const handleStartVoiceLoop = () => {
     if (!isVoiceLoopActive) {
-      setIsVoiceLoopActive(true);
-      startRecognition(); // Directly call startRecognition here
+      setIsVoiceLoopActive(true); // This will trigger the new useEffect to start recognition
     }
   };
 
   // Function to stop the voice loop
   const handleStopVoiceLoop = () => {
-    setIsVoiceLoopActive(false);
+    setIsVoiceLoopActive(false); // This will trigger the new useEffect to stop recognition
     cancelSpeech();
-    recognitionRef.current?.stop(); // Ensure recognition is stopped
-    setIsRecordingUser(false);
-    setIsSpeakingAI(false);
-    setIsThinkingAI(false);
-    setCurrentInterimText('');
-    setAiResponseText('');
     toast.info("Voice loop stopped.");
   };
 
