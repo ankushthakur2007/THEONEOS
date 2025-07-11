@@ -42,7 +42,7 @@ const Home: React.FC = () => {
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
       setIsSpeakingAI(true);
-      setAiResponseText(aiText);
+      // aiResponseText is already set by handleTranscriptionComplete
       setCurrentInterimText(''); // Clear interim text when AI starts speaking
 
       audioRef.current.play().then(() => {
@@ -51,13 +51,13 @@ const Home: React.FC = () => {
         console.error("Error attempting to play audio:", e);
         toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
-        setAiResponseText('');
+        setAiResponseText(''); // Clear AI text on audio playback error
         startRecognition(); // Restart listening even if audio playback fails
       });
 
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
-        setAiResponseText('');
+        setAiResponseText(''); // Clear AI text after speaking
         startRecognition(); // Automatically restart listening after AI finishes speaking
       };
 
@@ -65,7 +65,7 @@ const Home: React.FC = () => {
         console.error("Audio playback error event.");
         toast.error("Audio playback error.");
         setIsSpeakingAI(false);
-        setAiResponseText('');
+        setAiResponseText(''); // Clear AI text on audio error
         startRecognition(); // Restart listening on audio error
       };
     }
@@ -81,13 +81,13 @@ const Home: React.FC = () => {
 
       utterance.onstart = () => {
         setIsSpeakingAI(true);
-        setAiResponseText(text);
+        // aiResponseText is already set by handleTranscriptionComplete
         setCurrentInterimText('');
       };
 
       utterance.onend = () => {
         setIsSpeakingAI(false);
-        setAiResponseText('');
+        setAiResponseText(''); // Clear AI text after speaking
         startRecognition(); // Automatically restart listening after AI finishes speaking
       };
 
@@ -95,7 +95,7 @@ const Home: React.FC = () => {
         console.error('Web Speech API error:', event.error);
         toast.error("Browser speech synthesis failed.");
         setIsSpeakingAI(false);
-        setAiResponseText('');
+        setAiResponseText(''); // Clear AI text on Web Speech API error
         startRecognition(); // Restart listening on Web Speech API error
       };
 
@@ -103,7 +103,7 @@ const Home: React.FC = () => {
     } else {
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
-      setAiResponseText('');
+      setAiResponseText(''); // Clear AI text if no support
       // If Web Speech API is not supported, we still need to restart recognition
       startRecognition();
     }
@@ -113,35 +113,33 @@ const Home: React.FC = () => {
   const handleTranscriptionComplete = useCallback(async (text: string) => {
     setIsThinkingAI(true);
     setCurrentInterimText('');
-    setAiResponseText('');
+    setAiResponseText(''); // Clear previous AI text
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
-    // Create the new history array *before* sending the request
     const updatedMessagesForAI = [...messages, newUserMessage];
+    setMessages(prevMessages => [...prevMessages, newUserMessage]); // Optimistic update
 
-    // Optimistically update local state for display
-    setMessages(prevMessages => [...prevMessages, newUserMessage]);
+    let aiText = '';
+    let audioUrl: string | null = null;
 
     try {
-      // 1. Call Gemini AI Edge Function with full history
+      // 1. Call Gemini AI Edge Function
       const geminiResponse = await supabase.functions.invoke('gemini-chat', {
-        body: { prompt: text, history: updatedMessagesForAI }, // Send the history including the current user message
+        body: { prompt: text, history: updatedMessagesForAI },
       });
 
       if (geminiResponse.error) {
         throw new Error(geminiResponse.error.message);
       }
+      aiText = geminiResponse.data.text;
 
-      const aiText = geminiResponse.data.text;
-      const newAiMessage: ChatMessage = { role: 'model', parts: [{ text: aiText }] };
-      // Update messages state with AI's response
-      setMessages(prevMessages => [...prevMessages, newAiMessage]);
+      // Set AI response text immediately for display, and stop thinking state
+      setAiResponseText(aiText);
+      setIsThinkingAI(false); // AI has finished thinking, now it's about speaking
 
-      let audioUrl: string | null = null;
-      let ttsUsedFallback = false;
-
+      // 2. Attempt TTS
+      let ttsAttempted = false; // Flag to ensure at least one TTS method is tried
       try {
-        // 2. Try calling Eleven Labs TTS Edge Function
         const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
           body: { text: aiText },
         });
@@ -149,22 +147,24 @@ const Home: React.FC = () => {
         if (elevenLabsResponse.error || !elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
           console.warn('ElevenLabs TTS failed, attempting fallback to Web Speech API:', elevenLabsResponse.error?.message || 'Invalid data');
           speakWithWebSpeechAPI(aiText);
-          ttsUsedFallback = true;
+          ttsAttempted = true;
           toast.info("ElevenLabs failed, using browser's voice.");
         } else {
           audioUrl = elevenLabsResponse.data.audioUrl;
           playAudioAndThenListen(audioUrl, aiText);
+          ttsAttempted = true;
         }
       } catch (elevenLabsError: any) {
         console.warn('ElevenLabs TTS failed completely, attempting fallback to Web Speech API:', elevenLabsError.message);
         speakWithWebSpeechAPI(aiText);
-        ttsUsedFallback = true;
+        ttsAttempted = true;
         toast.info("ElevenLabs failed, using browser's voice.");
       }
 
-      // If neither ElevenLabs nor Web Speech API could be used, then it's an overall failure for TTS
-      if (!audioUrl && !ttsUsedFallback) {
-        throw new Error("Failed to generate speech from both ElevenLabs and Web Speech API.");
+      // If no TTS was attempted (shouldn't happen with current logic, but as a safeguard)
+      if (!ttsAttempted) {
+        console.warn("No TTS method was attempted. Manually restarting recognition.");
+        startRecognition(); // Fallback if somehow no TTS path was taken
       }
 
       // 3. Store interaction in Supabase
@@ -173,7 +173,7 @@ const Home: React.FC = () => {
           user_id: session.user.id,
           input_text: text,
           response_text: aiText,
-          audio_url: audioUrl, // Store audioUrl if available, else null
+          audio_url: audioUrl,
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
@@ -184,17 +184,14 @@ const Home: React.FC = () => {
       toast.success("AI response received!");
 
     } catch (error: any) {
-      console.error('Error interacting with AI or TTS:', error);
+      console.error('Overall error in AI interaction:', error);
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
-      setAiResponseText('');
-      // If AI interaction fails, remove the last user message from history to avoid sending it again
-      setMessages(prevMessages => prevMessages.slice(0, -1));
-      startRecognition();
-    } finally {
-      setIsThinkingAI(false);
+      setAiResponseText(''); // Clear AI text on error
+      setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
+      startRecognition(); // If there's an error before TTS even starts, go back to listening
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText, startRecognition, messages]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages]);
 
   // Initialize Speech Recognition
   useEffect(() => {
