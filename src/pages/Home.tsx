@@ -4,7 +4,7 @@ import { useSession } from '@/components/SessionContextProvider';
 import VoiceInputModal from '@/components/VoiceInputModal';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } => '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageSquare, User } from 'lucide-react';
 
@@ -17,7 +17,7 @@ interface Message {
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
-  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModal] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -31,7 +31,7 @@ const Home: React.FC = () => {
   };
 
   const handleOpenVoiceInput = () => {
-    setIsVoiceModalOpen(true);
+    setIsVoiceModal(true);
   };
 
   const playAudio = (audioBlob: Blob) => {
@@ -49,7 +49,7 @@ const Home: React.FC = () => {
   };
 
   const handleTranscriptionComplete = async (text: string) => {
-    setIsVoiceModalOpen(false);
+    setIsVoiceModal(false);
     if (!text.trim()) {
       toast.info("No speech detected or transcription was empty.");
       return;
@@ -92,24 +92,18 @@ const Home: React.FC = () => {
       if (elevenLabsResponse.data && typeof elevenLabsResponse.data === 'object' && elevenLabsResponse.data.type === 'Buffer' && Array.isArray(elevenLabsResponse.data.data)) {
         // Convert the array of numbers (bytes) into a Uint8Array, then to an ArrayBuffer
         audioArrayBuffer = new Uint8Array(elevenLabsResponse.data.data).buffer;
-        console.log("Successfully converted Buffer-like object to ArrayBuffer.");
       } else if (elevenLabsResponse.data instanceof ArrayBuffer) {
         // If it's already an ArrayBuffer (less common with invoke for binary, but good to check)
         audioArrayBuffer = elevenLabsResponse.data;
-        console.log("Received ArrayBuffer directly.");
       } else {
         throw new Error("Invalid audio data format received from Eleven Labs. Expected ArrayBuffer or Buffer-like object.");
       }
-
-      console.log("Eleven Labs ArrayBuffer byteLength:", audioArrayBuffer.byteLength);
 
       if (audioArrayBuffer.byteLength === 0) {
         throw new Error("Received empty audio data from Eleven Labs.");
       }
 
       const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
-      console.log("Audio Blob size:", audioBlob.size);
-
       playAudio(audioBlob);
 
       // 3. Store interaction in Supabase
@@ -197,8 +191,8 @@ const Home: React.FC = () => {
       </div>
 
       <VoiceInputModal
-        isOpen={isVoiceModalOpen}
-        onClose={() => setIsVoiceModalOpen(false)}
+        isOpen={isVoiceModal}
+        onClose={() => setIsVoiceModal(false)}
         onTranscriptionComplete={handleTranscriptionComplete}
       />
       <audio ref={audioRef} className="hidden" />
