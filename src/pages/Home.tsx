@@ -10,6 +10,7 @@ const Home: React.FC = () => {
   const [isRecordingUser, setIsRecordingUser] = useState(false);
   const [isSpeakingAI, setIsSpeakingAI] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
+  const [aiResponseText, setAiResponseText] = useState(''); // New state for AI response text
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -32,6 +33,7 @@ const Home: React.FC = () => {
     recognition.onstart = () => {
       setIsRecordingUser(true);
       setCurrentInterimText('');
+      setAiResponseText(''); // Clear AI text when user starts speaking
       finalTranscriptionRef.current = '';
       toast.info("Listening...");
     };
@@ -58,6 +60,7 @@ const Home: React.FC = () => {
       setIsRecordingUser(false);
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
+      setAiResponseText(''); // Clear AI text on error
     };
 
     recognition.onend = () => {
@@ -67,9 +70,9 @@ const Home: React.FC = () => {
         handleTranscriptionComplete(finalTranscribedText);
       } else {
         toast.info("No speech detected.");
+        setCurrentInterimText(''); // Clear interim text if no speech
       }
       finalTranscriptionRef.current = '';
-      setCurrentInterimText('');
     };
 
     return () => {
@@ -94,20 +97,26 @@ const Home: React.FC = () => {
     }
   };
 
-  const playAudio = (audioUrl: string) => {
+  const playAudio = (audioUrl: string, aiText: string) => {
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
       setIsSpeakingAI(true);
+      setAiResponseText(aiText); // Set AI text to display
+      setCurrentInterimText(''); // Clear user interim text
+
       audioRef.current.play().catch(e => {
         console.error("Error playing audio:", e);
         toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
         setIsSpeakingAI(false);
+        setAiResponseText(''); // Clear AI text on error
       });
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
+        setAiResponseText(''); // Clear AI text after audio finishes
       };
       audioRef.current.onerror = () => {
         setIsSpeakingAI(false);
+        setAiResponseText(''); // Clear AI text on error
       };
     }
   };
@@ -142,7 +151,7 @@ const Home: React.FC = () => {
       }
 
       const audioUrl = elevenLabsResponse.data.audioUrl;
-      playAudio(audioUrl); // Start playing audio immediately
+      playAudio(audioUrl, aiText); // Start playing audio and display AI text
 
       // 3. Store interaction in Supabase
       if (session?.user?.id) {
@@ -166,16 +175,17 @@ const Home: React.FC = () => {
       toast.dismiss(loadingToastId);
       toast.error(`Failed to get AI response: ${error.message}`);
       setIsSpeakingAI(false); // Ensure AI speaking state is reset on error
+      setAiResponseText(''); // Clear AI text on error
     }
   };
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
-      {/* Live transcription text in the center */}
+      {/* Live transcription text or AI response text in the center */}
       <div className="flex-grow flex items-center justify-center">
-        {currentInterimText && (
+        {(currentInterimText || aiResponseText) && (
           <p className="text-3xl font-semibold text-gray-300 text-center px-4 max-w-3xl">
-            {currentInterimText}
+            {currentInterimText || aiResponseText}
           </p>
         )}
       </div>
