@@ -4,7 +4,7 @@ import { useSession } from '@/components/SessionContextProvider';
 import VoiceInputModal from '@/components/VoiceInputModal';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea } => '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageSquare, User } from 'lucide-react';
 
@@ -76,7 +76,6 @@ const Home: React.FC = () => {
       }
 
       const aiText = geminiResponse.data.text;
-      console.log("AI Text from Gemini:", aiText); // Log AI text
 
       // 2. Call Eleven Labs TTS Edge Function
       const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
@@ -87,22 +86,19 @@ const Home: React.FC = () => {
         throw new Error(elevenLabsResponse.error.message);
       }
 
-      // --- Debugging logs for audio data ---
-      console.log("Eleven Labs raw response data type:", typeof elevenLabsResponse.data);
-      console.log("Eleven Labs raw response data:", elevenLabsResponse.data);
+      let audioArrayBuffer: ArrayBuffer;
 
-      let audioArrayBuffer = elevenLabsResponse.data;
-
-      // Check if data is an ArrayBuffer and its size
-      if (!(audioArrayBuffer instanceof ArrayBuffer)) {
-        console.error("Eleven Labs response data is not an ArrayBuffer as expected.");
-        // Attempt to convert if it's a plain object with a 'data' property (common for some API responses)
-        if (audioArrayBuffer && typeof audioArrayBuffer === 'object' && 'data' in audioArrayBuffer && audioArrayBuffer.data instanceof ArrayBuffer) {
-          audioArrayBuffer = audioArrayBuffer.data;
-          console.log("Successfully extracted ArrayBuffer from nested 'data' property.");
-        } else {
-          throw new Error("Invalid audio data format received from Eleven Labs. Expected ArrayBuffer.");
-        }
+      // Check if data is a Buffer-like object (common for Supabase invoke with binary responses)
+      if (elevenLabsResponse.data && typeof elevenLabsResponse.data === 'object' && elevenLabsResponse.data.type === 'Buffer' && Array.isArray(elevenLabsResponse.data.data)) {
+        // Convert the array of numbers (bytes) into a Uint8Array, then to an ArrayBuffer
+        audioArrayBuffer = new Uint8Array(elevenLabsResponse.data.data).buffer;
+        console.log("Successfully converted Buffer-like object to ArrayBuffer.");
+      } else if (elevenLabsResponse.data instanceof ArrayBuffer) {
+        // If it's already an ArrayBuffer (less common with invoke for binary, but good to check)
+        audioArrayBuffer = elevenLabsResponse.data;
+        console.log("Received ArrayBuffer directly.");
+      } else {
+        throw new Error("Invalid audio data format received from Eleven Labs. Expected ArrayBuffer or Buffer-like object.");
       }
 
       console.log("Eleven Labs ArrayBuffer byteLength:", audioArrayBuffer.byteLength);
@@ -113,7 +109,6 @@ const Home: React.FC = () => {
 
       const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
       console.log("Audio Blob size:", audioBlob.size);
-      // --- End Debugging logs ---
 
       playAudio(audioBlob);
 
