@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageSquare, User } from 'lucide-react'; // Removed Bot icon as AI text messages are removed
+import { MessageSquare, User } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -28,7 +28,6 @@ const Home: React.FC = () => {
       console.error('Error logging out:', error.message);
       toast.error('Failed to log out.');
     }
-    // The SessionContextProvider will handle the redirect to /login
   };
 
   const handleOpenVoiceInput = () => {
@@ -39,9 +38,12 @@ const Home: React.FC = () => {
     if (audioRef.current) {
       const audioUrl = URL.createObjectURL(audioBlob);
       audioRef.current.src = audioUrl;
-      audioRef.current.play().catch(e => console.error("Error playing audio:", e));
+      audioRef.current.play().catch(e => {
+        console.error("Error playing audio:", e);
+        toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
+      });
       audioRef.current.onended = () => {
-        URL.revokeObjectURL(audioUrl); // Clean up the object URL
+        URL.revokeObjectURL(audioUrl);
       };
     }
   };
@@ -74,7 +76,7 @@ const Home: React.FC = () => {
       }
 
       const aiText = geminiResponse.data.text;
-      // AI text message is no longer added to the 'messages' state to prevent display
+      console.log("AI Text from Gemini:", aiText); // Log AI text
 
       // 2. Call Eleven Labs TTS Edge Function
       const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
@@ -85,8 +87,34 @@ const Home: React.FC = () => {
         throw new Error(elevenLabsResponse.error.message);
       }
 
-      // The response data is an ArrayBuffer, convert it to a Blob
-      const audioBlob = new Blob([elevenLabsResponse.data], { type: 'audio/mpeg' });
+      // --- Debugging logs for audio data ---
+      console.log("Eleven Labs raw response data type:", typeof elevenLabsResponse.data);
+      console.log("Eleven Labs raw response data:", elevenLabsResponse.data);
+
+      let audioArrayBuffer = elevenLabsResponse.data;
+
+      // Check if data is an ArrayBuffer and its size
+      if (!(audioArrayBuffer instanceof ArrayBuffer)) {
+        console.error("Eleven Labs response data is not an ArrayBuffer as expected.");
+        // Attempt to convert if it's a plain object with a 'data' property (common for some API responses)
+        if (audioArrayBuffer && typeof audioArrayBuffer === 'object' && 'data' in audioArrayBuffer && audioArrayBuffer.data instanceof ArrayBuffer) {
+          audioArrayBuffer = audioArrayBuffer.data;
+          console.log("Successfully extracted ArrayBuffer from nested 'data' property.");
+        } else {
+          throw new Error("Invalid audio data format received from Eleven Labs. Expected ArrayBuffer.");
+        }
+      }
+
+      console.log("Eleven Labs ArrayBuffer byteLength:", audioArrayBuffer.byteLength);
+
+      if (audioArrayBuffer.byteLength === 0) {
+        throw new Error("Received empty audio data from Eleven Labs.");
+      }
+
+      const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
+      console.log("Audio Blob size:", audioBlob.size);
+      // --- End Debugging logs ---
+
       playAudio(audioBlob);
 
       // 3. Store interaction in Supabase
@@ -94,7 +122,7 @@ const Home: React.FC = () => {
         const { error: dbError } = await supabase.from('interactions').insert({
           user_id: session.user.id,
           input_text: text,
-          response_text: aiText, // Still store the AI's text response in the database
+          response_text: aiText,
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
@@ -142,7 +170,6 @@ const Home: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {messages.map((msg) => (
-                    // Only display user messages
                     msg.type === 'user' && (
                       <div
                         key={msg.id}
@@ -162,7 +189,6 @@ const Home: React.FC = () => {
                       </div>
                     )
                   ))}
-                  {/* Removed isLoadingAI message as per request */}
                 </div>
               )}
             </ScrollArea>
@@ -180,7 +206,7 @@ const Home: React.FC = () => {
         onClose={() => setIsVoiceModalOpen(false)}
         onTranscriptionComplete={handleTranscriptionComplete}
       />
-      <audio ref={audioRef} className="hidden" /> {/* Hidden audio element for playback */}
+      <audio ref={audioRef} className="hidden" />
     </div>
   );
 };
