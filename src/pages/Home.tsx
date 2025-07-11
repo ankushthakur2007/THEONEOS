@@ -46,13 +46,16 @@ const Home: React.FC = () => {
         toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
+        // After AI finishes speaking (or fails), prepare for next human input
+        // This will be handled by onended/onerror, but if play() fails immediately, we need to ensure next turn.
+        // For now, let onended/onerror handle the restart.
       });
 
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // Recognition should already be running if continuous is true.
-        // No need to call startRecognition() here.
+        // AI has finished speaking, now it's human's turn
+        // No need to call startRecognition() here, the button will be available.
       };
 
       audioRef.current.onerror = () => {
@@ -60,6 +63,8 @@ const Home: React.FC = () => {
         toast.error("Audio playback error.");
         setIsSpeakingAI(false);
         setAiResponseText('');
+        // AI has finished speaking (or failed), now it's human's turn
+        // No need to call startRecognition() here, the button will be available.
       };
     }
   }, []);
@@ -81,8 +86,8 @@ const Home: React.FC = () => {
       utterance.onend = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // Recognition should already be running if continuous is true.
-        // No need to call startRecognition() here.
+        // AI has finished speaking, now it's human's turn
+        // No need to call startRecognition() here, the button will be available.
       };
 
       utterance.onerror = (event) => {
@@ -185,7 +190,7 @@ const Home: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
 
-    recognition.continuous = true; // IMPORTANT CHANGE: Set to true for continuous listening
+    recognition.continuous = false; // IMPORTANT CHANGE: Set to false for single utterance
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -211,50 +216,31 @@ const Home: React.FC = () => {
       }
       finalTranscriptionRef.current += currentFinalTranscript;
       setCurrentInterimText(finalTranscriptionRef.current + interimTranscript);
-
-      // If a final result is received, process it
-      if (currentFinalTranscript.trim()) {
-        handleTranscriptionComplete(currentFinalTranscript.trim());
-        finalTranscriptionRef.current = ''; // Clear for next segment
-      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Attempting to restart.`);
-      setIsRecordingUser(false); // Recognition session has ended due to error
+      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Tap the sparkle button to try again.`);
+      setIsRecordingUser(false);
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      // Attempt to restart recognition after an error
-      // A small delay might be beneficial here to avoid rapid restarts if the error is persistent.
-      setTimeout(() => {
-        if (recognitionRef.current) { // Check if component is still mounted
-          startRecognition();
-        }
-      }, 1000); // Wait 1 second before attempting restart
     };
 
     recognition.onend = () => {
       console.log("Speech recognition session ended.");
       setIsRecordingUser(false); // Recognition session has ended
-      finalTranscriptionRef.current = '';
-      setCurrentInterimText('');
-      setAiResponseText('');
-      // If the session ended unexpectedly (not by user stopping it), restart it.
-      // We only restart if AI is not currently speaking or thinking.
-      if (!isSpeakingAI && !isThinkingAI) {
-        toast.info("Speech recognition session ended. Restarting listening.");
-        setTimeout(() => {
-          if (recognitionRef.current) { // Check if component is still mounted
-            startRecognition();
-          }
-        }, 500); // Small delay before restarting
+      const finalTranscribedText = finalTranscriptionRef.current.trim();
+      if (finalTranscribedText) {
+        handleTranscriptionComplete(finalTranscribedText);
+      } else {
+        toast.info("No speech detected. Tap the sparkle button to speak.");
+        setCurrentInterimText('');
       }
+      finalTranscriptionRef.current = '';
     };
 
-    // Initial start when component mounts
-    startRecognition();
+    // Removed initial startRecognition() call here. User will click button.
 
     return () => {
       if (recognitionRef.current) {
@@ -262,7 +248,7 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, [handleTranscriptionComplete, startRecognition, isSpeakingAI, isThinkingAI]);
+  }, [handleTranscriptionComplete]);
 
   const handleToggleRecording = () => {
     if (isSpeakingAI || isThinkingAI) {
@@ -270,9 +256,9 @@ const Home: React.FC = () => {
     }
 
     if (isRecordingUser) {
-      // If currently recording, stop it. This is the manual stop.
+      // If currently recording, stop it. This will trigger onend.
       recognitionRef.current?.stop();
-      setIsRecordingUser(false); // Manually set state to false
+      // setIsRecordingUser(false); // onend will handle this state update
       toast.info("Voice input stopped.");
     } else {
       // If not recording, start it.
