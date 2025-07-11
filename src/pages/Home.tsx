@@ -88,15 +88,38 @@ const Home: React.FC = () => {
 
       let audioArrayBuffer: ArrayBuffer;
 
-      // Check if data is a Buffer-like object (common for Supabase invoke with binary responses)
-      if (elevenLabsResponse.data && typeof elevenLabsResponse.data === 'object' && elevenLabsResponse.data.type === 'Buffer' && Array.isArray(elevenLabsResponse.data.data)) {
-        // Convert the array of numbers (bytes) into a Uint8Array, then to an ArrayBuffer
-        audioArrayBuffer = new Uint8Array(elevenLabsResponse.data.data).buffer;
-      } else if (elevenLabsResponse.data instanceof ArrayBuffer) { // Corrected typo here
-        // If it's already an ArrayBuffer (less common with invoke for binary, but good to check)
+      // Case 1: Data is already an ArrayBuffer (ideal scenario for binary response)
+      if (elevenLabsResponse.data instanceof ArrayBuffer) {
         audioArrayBuffer = elevenLabsResponse.data;
-      } else {
-        throw new Error("Invalid audio data format received from Eleven Labs. Expected ArrayBuffer or Buffer-like object.");
+      } 
+      // Case 2: Data is a Uint8Array (another common binary representation)
+      else if (elevenLabsResponse.data instanceof Uint8Array) {
+        audioArrayBuffer = elevenLabsResponse.data.buffer;
+      }
+      // Case 3: Data is a Buffer-like object (common when serialized from Node.js/Deno functions)
+      // This is often { type: 'Buffer', data: [byte1, byte2, ...] }
+      else if (
+        elevenLabsResponse.data &&
+        typeof elevenLabsResponse.data === 'object' &&
+        elevenLabsResponse.data.type === 'Buffer' &&
+        Array.isArray(elevenLabsResponse.data.data)
+      ) {
+        audioArrayBuffer = new Uint8Array(elevenLabsResponse.data.data).buffer;
+      } 
+      // Case 4: Data is a plain array of numbers (bytes), without the 'type: Buffer' wrapper
+      else if (Array.isArray(elevenLabsResponse.data)) {
+        audioArrayBuffer = new Uint8Array(elevenLabsResponse.data).buffer;
+      }
+      // Case 5: Data is a plain object, likely an error message from the edge function or Eleven Labs
+      else if (elevenLabsResponse.data && typeof elevenLabsResponse.data === 'object') {
+        // Assume it's an error object and re-throw its message
+        const errorMessage = elevenLabsResponse.data.error || JSON.stringify(elevenLabsResponse.data);
+        throw new Error(`Eleven Labs API returned an error: ${errorMessage}`);
+      }
+      // Fallback for any other unexpected format
+      else {
+        console.error("Unexpected Eleven Labs response data format:", elevenLabsResponse.data);
+        throw new Error("Invalid audio data format received from Eleven Labs. Expected ArrayBuffer, Uint8Array, or Buffer-like object.");
       }
 
       if (audioArrayBuffer.byteLength === 0) {
