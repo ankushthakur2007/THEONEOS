@@ -300,7 +300,8 @@ const Home: React.FC = () => {
       toast.error("Microphone access denied. Please enable microphone permissions.");
       setIsVoiceLoopActive(false); // Critical error, stop loop
     } else {
-      toast.info(`Speech recognition error: ${event.error}. Listening again...`);
+      // Enhanced message for 'no-speech' and other non-critical errors
+      toast.info(`Speech recognition error: ${event.error}. Please check your microphone and speak clearly. Listening again...`);
       if (isVoiceLoopActiveRef.current) { // Use ref
         startRecognition();
       }
@@ -314,7 +315,8 @@ const Home: React.FC = () => {
     if (finalTranscribedText) {
       processUserSpeech(finalTranscribedText);
     } else {
-      toast.info("No speech detected. Listening again...");
+      // Enhanced message for 'no-speech' when recognition ends without final text
+      toast.info("No speech detected. Please check your microphone and speak clearly. Listening again...");
       setCurrentInterimText('');
       if (isVoiceLoopActiveRef.current) { // Use ref
         startRecognition();
