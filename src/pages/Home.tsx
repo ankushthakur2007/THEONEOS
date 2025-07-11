@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Sparkles } from 'lucide-react'; // Removed StopCircle as it's not used
+import { Sparkles } from 'lucide-react';
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -46,20 +46,23 @@ const Home: React.FC = () => {
         toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Try to start recognition even if audio fails
+        // Try to start recognition even if audio fails, with a slight delay
+        setTimeout(() => startRecognition(), 100);
       });
 
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Automatically start listening for user input after AI finishes speaking
+        // Automatically start listening for user input after AI finishes speaking, with a slight delay
+        setTimeout(() => startRecognition(), 100);
       };
 
       audioRef.current.onerror = () => {
         console.error("Audio playback error event.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Try to start recognition if audio errors
+        // Try to start recognition if audio errors, with a slight delay
+        setTimeout(() => startRecognition(), 100);
       };
     }
   }, [startRecognition]);
@@ -110,8 +113,8 @@ const Home: React.FC = () => {
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      // Attempt to restart recognition after an error
-      startRecognition();
+      // Attempt to restart recognition after an error with a slight delay
+      setTimeout(() => startRecognition(), 100);
     };
 
     recognition.onend = () => {
@@ -122,8 +125,8 @@ const Home: React.FC = () => {
       } else {
         toast.info("No speech detected. Ready for your input.");
         setCurrentInterimText('');
-        // If no speech detected, automatically try to start listening again
-        startRecognition();
+        // If no speech detected, automatically try to start listening again with a slight delay
+        setTimeout(() => startRecognition(), 100);
       }
       finalTranscriptionRef.current = '';
     };
@@ -203,31 +206,31 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
-      startRecognition(); // Attempt to restart recognition after an error
+      // Attempt to restart recognition after an error, with a slight delay
+      setTimeout(() => startRecognition(), 100);
     } finally {
       setIsThinkingAI(false);
     }
   };
 
   // Determine the main status text to display
-  const mainStatusText = isRecordingUser
-    ? "Listening..."
+  const displayMessage = isRecordingUser
+    ? currentInterimText || "Listening..." // Show interim text if available, else "Listening..."
     : isSpeakingAI
-    ? "AI is speaking..."
+    ? aiResponseText || "AI is speaking..." // Show AI response text if available, else "AI is speaking..."
     : isThinkingAI
     ? "Thinking..."
-    : currentInterimText || aiResponseText; // Show transcription or AI response if available
+    : "Tap to speak"; // Default message when idle
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-gray-900 text-white p-4">
       <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4">
-        {/* Display main status text or transcription/AI response */}
-        {mainStatusText ? (
+        {/* Display message or button */}
+        {isRecordingUser || isSpeakingAI || isThinkingAI ? (
           <p className="text-3xl font-semibold text-gray-300 text-center">
-            {mainStatusText}
+            {displayMessage}
           </p>
         ) : (
-          // Display the button when idle
           <Button
             variant="default"
             size="icon"
