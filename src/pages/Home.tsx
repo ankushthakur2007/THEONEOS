@@ -113,9 +113,6 @@ const Home: React.FC = () => {
   };
 
   const handleTranscriptionComplete = async (text: string) => {
-    // No longer adding user message to a visible list on this screen
-    // setMessages((prev) => [...prev, userMessage]); // Removed
-
     const loadingToastId = toast.loading("Thinking...");
 
     try {
@@ -147,9 +144,6 @@ const Home: React.FC = () => {
       const audioUrl = elevenLabsResponse.data.audioUrl;
       playAudio(audioUrl); // Start playing audio immediately
 
-      // No longer adding AI message to a visible list on this screen
-      // setMessages((prev) => [...prev, aiMessage]); // Removed
-
       // 3. Store interaction in Supabase
       if (session?.user?.id) {
         const { error: dbError } = await supabase.from('interactions').insert({
@@ -177,17 +171,17 @@ const Home: React.FC = () => {
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
+      {/* Live transcription text in the center */}
       <div className="flex-grow flex items-center justify-center">
-        {/* Placeholder for potential AI avatar or central element */}
-        {/* You can add an image or a larger visualizer here if desired */}
-      </div>
-
-      <div className="relative flex flex-col items-center justify-center mb-8">
         {currentInterimText && (
-          <p className="text-xl text-gray-300 text-center px-4 mb-4 max-w-2xl">
+          <p className="text-3xl font-semibold text-gray-300 text-center px-4 max-w-3xl">
             {currentInterimText}
           </p>
         )}
+      </div>
+
+      {/* Microphone button and visualizer */}
+      <div className="relative flex flex-col items-center justify-center mb-8">
         {(isRecordingUser || isSpeakingAI) && (
           <AudioVisualizer isAnimating={true} className="absolute inset-0 m-auto h-40 w-40" />
         )}
