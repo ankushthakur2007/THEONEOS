@@ -86,6 +86,9 @@ const Home: React.FC = () => {
         throw new Error(elevenLabsResponse.error.message);
       }
 
+      console.log("Eleven Labs Response Data Type:", typeof elevenLabsResponse.data);
+      console.log("Eleven Labs Response Data:", elevenLabsResponse.data);
+
       let audioArrayBuffer: ArrayBuffer;
 
       // Case 1: Data is already an ArrayBuffer (ideal scenario for binary response)

@@ -16,7 +16,11 @@ serve(async (req) => {
     const elevenLabsVoiceId = Deno.env.get('ELEVENLABS_VOICE_ID') || '21m00Tcm4TlvDq8ikWAM'; // Default to Rachel if not set
 
     if (!elevenLabsApiKey) {
-      throw new Error('ELEVENLABS_API_KEY not set in environment variables.');
+      console.error('ELEVENLABS_API_KEY not set in environment variables.');
+      return new Response(JSON.stringify({ error: 'ELEVENLABS_API_KEY not set.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      });
     }
 
     const response = await fetch(
@@ -38,13 +42,18 @@ serve(async (req) => {
       }
     );
 
+    console.log(`Eleven Labs API Response Status: ${response.status}`);
+    console.log(`Eleven Labs API Response Content-Type: ${response.headers.get('Content-Type')}`);
+
     if (!response.ok) {
       const errorData = await response.json();
+      console.error('Eleven Labs API error response:', errorData);
       throw new Error(`Eleven Labs API error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
 
     const audioBlob = await response.blob();
     const audioBuffer = await audioBlob.arrayBuffer();
+    console.log(`Eleven Labs Audio Buffer Byte Length: ${audioBuffer.byteLength}`);
 
     return new Response(audioBuffer, {
       headers: {
