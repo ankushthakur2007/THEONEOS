@@ -61,16 +61,16 @@ const Home: React.FC = () => {
       return;
     }
 
-    // Prevent starting if already recording to avoid InvalidStateError
-    if (isRecordingUser) {
-      console.log("SpeechRecognition: Already recording, skipping start.");
-      return;
+    // Explicitly stop any ongoing recognition before attempting to start a new one
+    // This is crucial for preventing InvalidStateError
+    if (recognitionRef.current.recognizing || (recognitionRef.current as any).readyState === SpeechRecognition.State.ACTIVE) {
+      recognitionRef.current.stop();
+      console.log("SpeechRecognition: Forced stop before new start.");
     }
 
     cancelSpeech(); // Ensure any previous speech is stopped before listening
 
     // Add a small delay to allow the recognition state to fully reset after stopping
-    // Increased delay to 500ms for more robustness
     setTimeout(() => {
       try {
         recognitionRef.current?.start(); // Use optional chaining as it might be null if component unmounts
@@ -82,7 +82,7 @@ const Home: React.FC = () => {
         setIsVoiceLoopActive(false); // Stop loop on recognition start error
       }
     }, 500); // Increased delay to 500ms
-  }, [cancelSpeech, isRecordingUser]);
+  }, [cancelSpeech]);
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
