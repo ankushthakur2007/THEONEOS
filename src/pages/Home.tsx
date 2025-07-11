@@ -14,6 +14,7 @@ const Home: React.FC = () => {
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasGreetedRef = useRef(false); // New ref to ensure greeting only plays once
 
   // Function to start speech recognition
   const startRecognition = useCallback(() => {
@@ -36,12 +37,17 @@ const Home: React.FC = () => {
       setAiResponseText(aiText);
       setCurrentInterimText('');
 
-      audioRef.current.play().catch(e => {
-        console.error("Error playing audio:", e);
-        toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
+      audioRef.current.play().then(() => {
+        // Audio started playing successfully, nothing to do here yet.
+        // The onended/onerror handlers will manage the next state.
+      }).catch(e => {
+        // This catch block handles immediate rejections of the play() promise.
+        // It does NOT mean the audio element's onerror will fire.
+        console.error("Error attempting to play audio:", e);
+        toast.error(`Audio playback failed: ${e.message}. You may need to tap the mic button to start.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Try to start recognition even if audio fails
+        // Do NOT call startRecognition here. Let onended/onerror handle it, or user click.
       });
 
       audioRef.current.onended = () => {
@@ -51,6 +57,7 @@ const Home: React.FC = () => {
       };
 
       audioRef.current.onerror = () => {
+        console.error("Audio playback error event.");
         setIsSpeakingAI(false);
         setAiResponseText('');
         startRecognition(); // Try to start recognition if audio errors
@@ -131,10 +138,12 @@ const Home: React.FC = () => {
   // Initial greeting and auto-start listening
   useEffect(() => {
     const initiateConversation = async () => {
-      if (!session?.user?.id) {
-        // Wait for session to be available
+      if (!session?.user?.id || hasGreetedRef.current) {
+        // Wait for session to be available, and ensure greeting only happens once
         return;
       }
+
+      hasGreetedRef.current = true; // Set flag to true to prevent re-greeting
 
       try {
         // Fetch user's first name
