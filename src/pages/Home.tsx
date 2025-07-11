@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { MadeWithDyad } from '@/components/made-with-dyad';
 import { useSession } from '@/components/SessionContextProvider';
-import VoiceInputModal from '@/components/VoiceInputModal'; // New import
+import VoiceInputModal from '@/components/VoiceInputModal';
 
 const Home: React.FC = () => {
   const { supabase } = useSession();
@@ -53,7 +52,6 @@ const Home: React.FC = () => {
           </Button>
         </div>
       </div>
-      <MadeWithDyad />
 
       <VoiceInputModal
         isOpen={isVoiceModalOpen}
