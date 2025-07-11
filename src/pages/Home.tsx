@@ -36,9 +36,6 @@ const Home: React.FC = () => {
 
   // Function to start speech recognition
   const startRecognition = useCallback(() => {
-    // Removed the `if (!isVoiceLoopActive)` check here.
-    // The decision to loop is now handled by the callers (onend/onerror callbacks)
-    // and the initial call from handleStartVoiceLoop.
     if (recognitionRef.current) {
       try {
         cancelSpeech(); // Ensure any previous speech is stopped before listening
@@ -47,13 +44,13 @@ const Home: React.FC = () => {
         console.error("Error starting speech recognition:", error);
         toast.error("Failed to start voice input. Please tap the sparkle button.");
         setIsRecordingUser(false);
-        setIsVoiceLoopActive(false); // Stop loop on recognition start error
+        setIsVoiceLoopActive(false); // Stop loop on recognition start error (e.g., if recognition object is somehow invalid)
       }
     } else {
       console.warn("SpeechRecognition object not initialized.");
       setIsVoiceLoopActive(false); // Stop loop if recognition object is null
     }
-  }, [cancelSpeech]); // Removed isVoiceLoopActive from dependencies here.
+  }, [cancelSpeech]);
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
@@ -173,10 +170,12 @@ const Home: React.FC = () => {
       // If aiText is empty, there's nothing to speak.
       if (!aiText) {
         setIsThinkingAI(false);
-        toast.info("AI returned an empty response. Tap the sparkle button to try again.");
+        toast.info("AI returned an empty response. Listening again...");
         setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
-        setIsVoiceLoopActive(false); // Stop loop if AI returns empty response
-        return; // Do not proceed to TTS or restart recognition automatically
+        if (isVoiceLoopActive) { // If AI returns empty, but loop is active, restart listening
+          startRecognition();
+        }
+        return; // Do not proceed to TTS
       }
 
       // Set AI response text immediately for display, and stop thinking state
@@ -231,11 +230,13 @@ const Home: React.FC = () => {
 
     } catch (error: any) {
       console.error('Overall error in AI interaction:', error);
-      toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
+      toast.error(`Failed to get AI response: ${error.message}. Listening again...`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText(''); // Clear AI text on error
       setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
-      setIsVoiceLoopActive(false); // Stop loop on any major error
+      if (isVoiceLoopActive) { // If an error occurs, but loop is active, restart listening
+        startRecognition();
+      }
     }
   }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages, isVoiceLoopActive]);
 
@@ -286,19 +287,17 @@ const Home: React.FC = () => {
       setCurrentInterimText('');
       setAiResponseText('');
 
-      if (event.error === 'no-speech') {
-        toast.info("No speech detected, listening again...");
-        if (isVoiceLoopActive) { // Only restart if loop is active
+      if (event.error === 'not-allowed') {
+        toast.error("Microphone access denied. Please enable microphone permissions.");
+        setIsVoiceLoopActive(false); // Stop loop if permission is denied
+      } else {
+        // For 'no-speech' or other non-critical errors, attempt to restart if loop is active
+        toast.info(`Speech recognition error: ${event.error}. Listening again...`);
+        if (isVoiceLoopActive) {
           startRecognition();
         } else {
           toast.info("Voice loop stopped.");
         }
-      } else if (event.error === 'not-allowed') {
-        toast.error("Microphone access denied. Please enable microphone permissions.");
-        setIsVoiceLoopActive(false); // Stop loop if permission is denied
-      } else {
-        toast.error(`Speech recognition error: ${event.error}. Tap the sparkle button to try again.`);
-        setIsVoiceLoopActive(false); // Stop loop on other errors
       }
     };
 
