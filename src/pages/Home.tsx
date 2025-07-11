@@ -70,6 +70,7 @@ const Home: React.FC = () => {
     cancelSpeech(); // Ensure any previous speech is stopped before listening
 
     // Add a small delay to allow the recognition state to fully reset after stopping
+    // Increased delay to 500ms for more robustness
     setTimeout(() => {
       try {
         recognitionRef.current?.start(); // Use optional chaining as it might be null if component unmounts
@@ -80,7 +81,7 @@ const Home: React.FC = () => {
         setIsRecordingUser(false);
         setIsVoiceLoopActive(false); // Stop loop on recognition start error
       }
-    }, 100); // 100ms delay
+    }, 500); // Increased delay to 500ms
   }, [cancelSpeech, isRecordingUser]);
 
   // Function to play audio from URL (for ElevenLabs)
