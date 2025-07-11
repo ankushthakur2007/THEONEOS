@@ -24,7 +24,8 @@ const Home: React.FC = () => {
   const [isRecognitionAPIAvailable, setIsRecognitionAPIAvailable] = useState(false); // New state for API availability
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // audioRef is no longer needed as ElevenLabs is removed
+  // const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Ref to hold the current state of isVoiceLoopActive for stable callbacks
   const isVoiceLoopActiveRef = useRef(isVoiceLoopActive);
@@ -38,10 +39,7 @@ const Home: React.FC = () => {
 
   // Helper function to cancel any ongoing speech (browser or audio element)
   const cancelSpeech = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
+    // Removed audioRef related pause/currentTime
     if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
       console.log("SpeechSynthesis: Canceled existing speech.");
@@ -85,48 +83,9 @@ const Home: React.FC = () => {
     }, 500); // Increased delay to 500ms
   }, [cancelSpeech]);
 
-  // Function to play audio from URL (for ElevenLabs)
-  const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
-    if (audioRef.current) {
-      audioRef.current.src = audioUrl;
-      setIsSpeakingAI(true);
-      setAiResponseText(aiText);
-      setCurrentInterimText('');
+  // Removed playAudioAndThenListen as ElevenLabs is no longer used
 
-      audioRef.current.play().then(() => {
-        console.log("ElevenLabs Audio: Playback started.");
-      }).catch(e => {
-        console.error("Error attempting to play ElevenLabs audio:", e);
-        toast.error(`Audio playback failed: ${e.message}.`);
-        setIsSpeakingAI(false);
-        setAiResponseText('');
-        if (isVoiceLoopActiveRef.current) {
-          startRecognition();
-        }
-      });
-
-      audioRef.current.onended = () => {
-        console.log("ElevenLabs Audio: Playback ended.");
-        setIsSpeakingAI(false);
-        setAiResponseText('');
-        if (isVoiceLoopActiveRef.current) {
-          startRecognition();
-        }
-      };
-
-      audioRef.current.onerror = () => {
-        console.error("ElevenLabs Audio: Playback error event.");
-        toast.error("Audio playback error.");
-        setIsSpeakingAI(false);
-        setAiResponseText('');
-        if (isVoiceLoopActiveRef.current) {
-          startRecognition();
-        }
-      };
-    }
-  }, [startRecognition]);
-
-  // Function to speak using Web Speech API (fallback)
+  // Function to speak using Web Speech API (now primary TTS)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
     if (!('speechSynthesis' in window)) {
       console.warn("Web Speech API: Not supported.");
@@ -199,7 +158,8 @@ const Home: React.FC = () => {
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
 
     let aiText = '';
-    let audioUrl: string | null = null;
+    // audioUrl is no longer needed
+    // let audioUrl: string | null = null;
 
     try {
       let conversationHistory: ChatMessage[] = [];
@@ -253,33 +213,8 @@ const Home: React.FC = () => {
       setAiResponseText(aiText);
       setIsThinkingAI(false);
 
-      let ttsAttempted = false;
-      try {
-        const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
-          body: { text: aiText },
-        });
-
-        if (elevenLabsResponse.error || !elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
-          console.warn('ElevenLabs TTS failed, attempting fallback to Web Speech API:', elevenLabsResponse.error?.message || 'Invalid data');
-          speakWithWebSpeechAPI(aiText);
-          ttsAttempted = true;
-          toast.info("ElevenLabs failed, using browser's voice.");
-        } else {
-          audioUrl = elevenLabsResponse.data.audioUrl;
-          playAudioAndThenListen(audioUrl, aiText);
-          ttsAttempted = true;
-        }
-      } catch (elevenLabsError: any) {
-        console.warn('ElevenLabs TTS failed completely, attempting fallback to Web Speech API:', elevenLabsError.message);
-        speakWithWebSpeechAPI(aiText);
-        ttsAttempted = true;
-        toast.info("ElevenLabs failed, using browser's voice.");
-      }
-
-      if (!ttsAttempted && isVoiceLoopActiveRef.current) {
-        console.warn("No TTS method was attempted. Manually restarting recognition.");
-        startRecognition();
-      }
+      // Directly use Web Speech API for TTS
+      speakWithWebSpeechAPI(aiText);
 
       // Save the new interaction to the database (including the AI's response)
       if (session?.user?.id) {
@@ -287,7 +222,8 @@ const Home: React.FC = () => {
           user_id: session.user.id,
           input_text: text,
           response_text: aiText,
-          audio_url: audioUrl,
+          // audio_url is no longer relevant
+          // audio_url: audioUrl,
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
@@ -307,7 +243,7 @@ const Home: React.FC = () => {
         startRecognition();
       }
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages]);
+  }, [supabase, session, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages]);
 
   // Stable SpeechRecognition event handlers
   const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
@@ -482,7 +418,8 @@ const Home: React.FC = () => {
           </Button>
         )}
       </div>
-      <audio ref={audioRef} className="hidden" />
+      {/* Removed audio element as ElevenLabs is no longer used */}
+      {/* <audio ref={audioRef} className="hidden" /> */}
 
       {isVoiceLoopActive && (
         <div className="absolute bottom-8">
