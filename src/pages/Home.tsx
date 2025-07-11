@@ -63,7 +63,7 @@ const Home: React.FC = () => {
         // No automatic restart here, return to idle
       };
     }
-  }, [startRecognition]); // Add startRecognition to dependencies
+  }, [startRecognition]);
 
   // Function to speak using Web Speech API (fallback)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
@@ -101,91 +101,10 @@ const Home: React.FC = () => {
       setIsSpeakingAI(false);
       setAiResponseText('');
     }
-  }, [startRecognition]); // Add startRecognition to dependencies
+  }, [startRecognition]);
 
-  // Initialize Speech Recognition
-  useEffect(() => {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
-    const recognition = recognitionRef.current;
-
-    recognition.continuous = false; // For single utterance, then restart
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsRecordingUser(true);
-      setCurrentInterimText('');
-      setAiResponseText('');
-      finalTranscriptionRef.current = '';
-      toast.info("Listening...");
-    };
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interimTranscript = '';
-      let currentFinalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          currentFinalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-      finalTranscriptionRef.current += currentFinalTranscript;
-      setCurrentInterimText(finalTranscriptionRef.current + interimTranscript);
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error);
-      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Tap the sparkle button to try again.`);
-      setIsRecordingUser(false);
-      finalTranscriptionRef.current = '';
-      setCurrentInterimText('');
-      setAiResponseText('');
-      // No automatic restart here, return to idle
-    };
-
-    recognition.onend = () => {
-      setIsRecordingUser(false);
-      const finalTranscribedText = finalTranscriptionRef.current.trim();
-      if (finalTranscribedText) {
-        handleTranscriptionComplete(finalTranscribedText);
-      } else {
-        toast.info("No speech detected. Tap the sparkle button to speak.");
-        setCurrentInterimText('');
-        // No automatic restart here, return to idle
-      }
-      finalTranscriptionRef.current = '';
-    };
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
-    };
-  }, [handleTranscriptionComplete]); // Add handleTranscriptionComplete to dependencies
-
-  const handleToggleRecording = () => {
-    if (isSpeakingAI || isThinkingAI) {
-      return; // Do nothing if AI is speaking or thinking
-    }
-
-    if (isRecordingUser) {
-      recognitionRef.current?.stop();
-    } else {
-      startRecognition();
-    }
-  };
-
-  const handleTranscriptionComplete = async (text: string) => {
+  // Function to handle transcription completion and AI interaction
+  const handleTranscriptionComplete = useCallback(async (text: string) => {
     setIsThinkingAI(true);
     setCurrentInterimText('');
     setAiResponseText('');
@@ -255,6 +174,88 @@ const Home: React.FC = () => {
       setAiResponseText('');
     } finally {
       setIsThinkingAI(false);
+    }
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText]);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    const recognition = recognitionRef.current;
+
+    recognition.continuous = false; // For single utterance, then restart
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecordingUser(true);
+      setCurrentInterimText('');
+      setAiResponseText('');
+      finalTranscriptionRef.current = '';
+      toast.info("Listening...");
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimTranscript = '';
+      let currentFinalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          currentFinalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      finalTranscriptionRef.current += currentFinalTranscript;
+      setCurrentInterimText(finalTranscriptionRef.current + interimTranscript);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Tap the sparkle button to try again.`);
+      setIsRecordingUser(false);
+      finalTranscriptionRef.current = '';
+      setCurrentInterimText('');
+      setAiResponseText('');
+      // No automatic restart here, return to idle
+    };
+
+    recognition.onend = () => {
+      setIsRecordingUser(false);
+      const finalTranscribedText = finalTranscriptionRef.current.trim();
+      if (finalTranscribedText) {
+        handleTranscriptionComplete(finalTranscribedText);
+      } else {
+        toast.info("No speech detected. Tap the sparkle button to speak.");
+        setCurrentInterimText('');
+        // No automatic restart here, return to idle
+      }
+      finalTranscriptionRef.current = '';
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
+  }, [handleTranscriptionComplete]);
+
+  const handleToggleRecording = () => {
+    if (isSpeakingAI || isThinkingAI) {
+      return; // Do nothing if AI is speaking or thinking
+    }
+
+    if (isRecordingUser) {
+      recognitionRef.current?.stop();
+    } else {
+      startRecognition();
     }
   };
 
