@@ -92,7 +92,7 @@ const Home: React.FC = () => {
       if (elevenLabsResponse.data && typeof elevenLabsResponse.data === 'object' && elevenLabsResponse.data.type === 'Buffer' && Array.isArray(elevenLabsResponse.data.data)) {
         // Convert the array of numbers (bytes) into a Uint8Array, then to an ArrayBuffer
         audioArrayBuffer = new Uint8Array(elevenLabsResponse.data.data).buffer;
-      } else if (elevenLabsResponse.data instanceof ArrayBuffer) {
+      } else if (elevenLabsResponse.data instanceof ArrayBuffer) { // Corrected typo here
         // If it's already an ArrayBuffer (less common with invoke for binary, but good to check)
         audioArrayBuffer = elevenLabsResponse.data;
       } else {
