@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Star, StopCircle } from 'lucide-react';
+import { Sparkles, StopCircle } from 'lucide-react'; // Changed Star to Sparkles
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -22,7 +22,7 @@ const Home: React.FC = () => {
         recognitionRef.current.start();
       } catch (error) {
         console.error("Error starting speech recognition:", error);
-        toast.error("Failed to start voice input. Please tap the star button.");
+        toast.error("Failed to start voice input. Please tap the sparkle button.");
         setIsRecordingUser(false);
       }
     }
@@ -41,7 +41,7 @@ const Home: React.FC = () => {
         // The onended/onerror handlers will manage the next state.
       }).catch(e => {
         console.error("Error attempting to play audio:", e);
-        toast.error(`Audio playback failed: ${e.message}. You may need to tap the star button to start.`);
+        toast.error(`Audio playback failed: ${e.message}. You may need to tap the sparkle button to start.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
         startRecognition(); // Try to start recognition even if audio fails
@@ -113,7 +113,7 @@ const Home: React.FC = () => {
         recognitionRef.current?.start();
       } catch (err) {
         console.error("Error restarting recognition after error:", err);
-        toast.error("Failed to automatically restart voice input. Please tap the star button.");
+        toast.error("Failed to automatically restart voice input. Please tap the sparkle button.");
       }
     };
 
@@ -131,7 +131,7 @@ const Home: React.FC = () => {
           recognitionRef.current?.start();
         } catch (e) {
           console.error("Error automatically starting speech recognition after no speech detected:", e);
-          toast.error("Failed to automatically restart voice input. Please tap the star button.");
+          toast.error("Failed to automatically restart voice input. Please tap the sparkle button.");
         }
       }
       finalTranscriptionRef.current = '';
@@ -238,7 +238,7 @@ const Home: React.FC = () => {
               className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
               onClick={handleToggleRecording}
             >
-              <Star className="h-12 w-12" />
+              <Sparkles className="h-12 w-12" />
             </Button>
           )}
           <p className="text-sm text-gray-400 mt-4">
