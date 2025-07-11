@@ -34,17 +34,13 @@ const Home: React.FC = () => {
     setIsVoiceModalOpen(true);
   };
 
-  const playAudio = (audioBlob: Blob) => {
+  const playAudio = (audioUrl: string) => {
     if (audioRef.current) {
-      const audioUrl = URL.createObjectURL(audioBlob);
       audioRef.current.src = audioUrl;
       audioRef.current.play().catch(e => {
         console.error("Error playing audio:", e);
         toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
       });
-      audioRef.current.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-      };
     }
   };
 
@@ -86,51 +82,14 @@ const Home: React.FC = () => {
         throw new Error(elevenLabsResponse.error.message);
       }
 
-      console.log("Eleven Labs Response Data Type:", typeof elevenLabsResponse.data);
-      console.log("Eleven Labs Response Data:", elevenLabsResponse.data);
-
-      let audioArrayBuffer: ArrayBuffer;
-
-      // Case 1: Data is already an ArrayBuffer (ideal scenario for binary response)
-      if (elevenLabsResponse.data instanceof ArrayBuffer) {
-        audioArrayBuffer = elevenLabsResponse.data;
-      } 
-      // Case 2: Data is a Uint8Array (another common binary representation)
-      else if (elevenLabsResponse.data instanceof Uint8Array) {
-        audioArrayBuffer = elevenLabsResponse.data.buffer;
-      }
-      // Case 3: Data is a Buffer-like object (common when serialized from Node.js/Deno functions)
-      // This is often { type: 'Buffer', data: [byte1, byte2, ...] }
-      else if (
-        elevenLabsResponse.data &&
-        typeof elevenLabsResponse.data === 'object' &&
-        elevenLabsResponse.data.type === 'Buffer' &&
-        Array.isArray(elevenLabsResponse.data.data)
-      ) {
-        audioArrayBuffer = new Uint8Array(elevenLabsResponse.data.data).buffer;
-      } 
-      // Case 4: Data is a plain array of numbers (bytes), without the 'type: Buffer' wrapper
-      else if (Array.isArray(elevenLabsResponse.data)) {
-        audioArrayBuffer = new Uint8Array(elevenLabsResponse.data).buffer;
-      }
-      // Case 5: Data is a plain object, likely an error message from the edge function or Eleven Labs
-      else if (elevenLabsResponse.data && typeof elevenLabsResponse.data === 'object') {
-        // Assume it's an error object and re-throw its message
-        const errorMessage = elevenLabsResponse.data.error || JSON.stringify(elevenLabsResponse.data);
-        throw new Error(`Eleven Labs API returned an error: ${errorMessage}`);
-      }
-      // Fallback for any other unexpected format
-      else {
-        console.error("Unexpected Eleven Labs response data format:", elevenLabsResponse.data);
-        throw new Error("Invalid audio data format received from Eleven Labs. Expected ArrayBuffer, Uint8Array, or Buffer-like object.");
+      // Expecting an object with audioUrl from the edge function
+      if (!elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
+        const errorMessage = elevenLabsResponse.data?.error || JSON.stringify(elevenLabsResponse.data);
+        throw new Error(`Invalid response from Eleven Labs TTS function: ${errorMessage}`);
       }
 
-      if (audioArrayBuffer.byteLength === 0) {
-        throw new Error("Received empty audio data from Eleven Labs.");
-      }
-
-      const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
-      playAudio(audioBlob);
+      const audioUrl = elevenLabsResponse.data.audioUrl;
+      playAudio(audioUrl);
 
       // Add AI response to messages
       const aiMessage: Message = {
@@ -147,6 +106,7 @@ const Home: React.FC = () => {
           user_id: session.user.id,
           input_text: text,
           response_text: aiText,
+          audio_url: audioUrl, // Store the audio URL
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,12 +56,41 @@ serve(async (req) => {
     const audioBuffer = await audioBlob.arrayBuffer();
     console.log(`Eleven Labs Audio Buffer Byte Length: ${audioBuffer.byteLength}`);
 
-    return new Response(audioBuffer, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'audio/mpeg', // Or 'audio/wav' depending on Eleven Labs output
-        'Cache-Control': 'public, max-age=3600',
-      },
+    // Initialize Supabase client for storage
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      throw new Error('Supabase URL or Service Role Key not set in environment variables.');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+    // Upload audio to Supabase Storage
+    const fileName = `${crypto.randomUUID()}.mp3`;
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('audio-responses') // Ensure this bucket exists in Supabase Storage
+      .upload(fileName, audioBuffer, {
+        contentType: 'audio/mpeg',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Supabase Storage upload error:', uploadError.message);
+      throw new Error(`Failed to upload audio to storage: ${uploadError.message}`);
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('audio-responses')
+      .getPublicUrl(fileName);
+
+    if (!publicUrlData || !publicUrlData.publicUrl) {
+      throw new Error('Failed to get public URL for uploaded audio.');
+    }
+
+    return new Response(JSON.stringify({ audioUrl: publicUrlData.publicUrl }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
