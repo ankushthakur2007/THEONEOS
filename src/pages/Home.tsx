@@ -1,19 +1,17 @@
 import React from 'react';
-import { supabase } from '@/services/supabase';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
 import { MadeWithDyad } from '@/components/made-with-dyad';
+import { useSession } from '@/components/SessionContextProvider';
 
 const Home: React.FC = () => {
-  const navigate = useNavigate();
+  const { supabase } = useSession();
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('Error logging out:', error.message);
-    } else {
-      navigate('/login');
     }
+    // The SessionContextProvider will handle the redirect to /login
   };
 
   return (

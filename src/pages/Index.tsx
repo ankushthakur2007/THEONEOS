@@ -1,47 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/services/supabase';
-import { Session } from '@supabase/supabase-js';
+import { useSession } from '@/components/SessionContextProvider';
 
 const Index: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const { session, supabase } = useSession(); // Use the session from context
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate('/home', { replace: true });
-      } else {
-        navigate('/login', { replace: true });
-      }
-      setLoading(false);
-    };
+    // SessionContextProvider already handles initial redirects and auth state changes.
+    // This page can simply act as a loading screen or initial entry point.
+    // If session is already known, redirect immediately.
+    if (session) {
+      navigate('/home', { replace: true });
+    } else {
+      navigate('/login', { replace: true });
+    }
+  }, [session, navigate]); // Depend on session to trigger redirect
 
-    checkSession();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        navigate('/home', { replace: true });
-      } else {
-        navigate('/login', { replace: true });
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe(); // Corrected line
-    };
-  }, [navigate]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <p className="text-xl text-gray-600 dark:text-gray-400">Loading application...</p>
-      </div>
-    );
-  }
-
-  return null; // Will redirect, so nothing to render here
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+      <p className="text-xl text-gray-600 dark:text-gray-400">Loading application...</p>
+    </div>
+  );
 };
 
 export default Index;
