@@ -21,7 +21,6 @@ const Home: React.FC = () => {
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]); // State for conversation history
-  const [isRecognitionReady, setIsRecognitionReady] = useState(false); // New state to track if recognition is ready
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -379,7 +378,6 @@ const Home: React.FC = () => {
       if (!SpeechRecognitionConstructor) {
         console.error("Speech recognition API not found or not a valid constructor.");
         toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
-        setIsRecognitionReady(false); // Ensure it's false if not supported
         return;
       }
 
@@ -401,8 +399,6 @@ const Home: React.FC = () => {
       recognition.onresult = handleRecognitionResult;
       recognition.onerror = handleRecognitionError;
       recognition.onend = handleRecognitionEnd;
-
-      setIsRecognitionReady(true); // Set to true once successfully initialized
     };
 
     // Defer execution to ensure window is fully ready
@@ -446,16 +442,13 @@ const Home: React.FC = () => {
   };
 
   // Determine the main status text to display
-  let displayMessage: string;
-  if (isRecordingUser) {
-    displayMessage = currentInterimText || "Listening...";
-  } else if (isThinkingAI) {
-    displayMessage = "Thinking...";
-  } else if (isSpeakingAI) {
-    displayMessage = aiResponseText || "AI is speaking...";
-  } else {
-    displayMessage = "Tap to speak";
-  }
+  const displayMessage = isRecordingUser
+    ? currentInterimText || "Listening..."
+    : isThinkingAI
+    ? "Thinking..."
+    : isSpeakingAI
+    ? aiResponseText || "AI is speaking..."
+    : "Tap to speak";
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
@@ -470,7 +463,6 @@ const Home: React.FC = () => {
             size="icon"
             className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
             onClick={handleStartVoiceLoop}
-            disabled={!isRecognitionReady} {/* Disable button if recognition is not ready */}
           >
             <Sparkles className="h-36 w-36" />
           </Button>
