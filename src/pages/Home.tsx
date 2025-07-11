@@ -304,19 +304,14 @@ const Home: React.FC = () => {
 
       if (event.error === 'not-allowed') {
         toast.error("Microphone access denied. Please enable microphone permissions.");
-        setIsVoiceLoopActive(false); // Stop loop if permission is denied
+        setIsVoiceLoopActive(false); // Critical error, stop loop
       } else {
         // For 'no-speech' or other non-critical errors, attempt to restart if loop is active
         toast.info(`Speech recognition error: ${event.error}. Listening again...`);
-        // Use a functional update for isVoiceLoopActive to get the latest state
-        setIsVoiceLoopActive(prev => {
-          if (prev) {
-            startRecognition();
-            return prev; // Keep active
-          }
-          toast.info("Voice loop stopped."); // Inform user if loop was stopped due to no speech
-          return false; // Set to inactive
-        });
+        if (isVoiceLoopActive) { // Only restart if loop is active
+          startRecognition();
+        }
+        // Do NOT set isVoiceLoopActive(false) here or show "Voice loop stopped."
       }
     };
 
@@ -327,17 +322,12 @@ const Home: React.FC = () => {
       if (finalTranscribedText) {
         processUserSpeech(finalTranscribedText); // Process the transcribed speech
       } else {
-        toast.info("No speech detected.");
+        toast.info("No speech detected. Listening again...");
         setCurrentInterimText('');
-        // Use a functional update for isVoiceLoopActive to get the latest state
-        setIsVoiceLoopActive(prev => {
-          if (prev) {
-            startRecognition();
-            return prev; // Keep active
-          }
-          toast.info("Voice loop stopped."); // Inform user if loop was stopped due to no speech
-          return false; // Set to inactive
-        });
+        if (isVoiceLoopActive) { // If no speech, go back to listening state, if loop is active
+          startRecognition();
+        }
+        // Do NOT set isVoiceLoopActive(false) here or show "Voice loop stopped."
       }
       finalTranscriptionRef.current = '';
     };
@@ -361,7 +351,7 @@ const Home: React.FC = () => {
   const handleStopVoiceLoop = () => {
     setIsVoiceLoopActive(false); // This will trigger the new useEffect to stop recognition
     cancelSpeech();
-    toast.info("Voice loop stopped.");
+    toast.info("Voice loop stopped."); // Only show this toast when explicitly stopped
   };
 
   // Determine the main status text to display
