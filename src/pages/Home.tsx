@@ -446,15 +446,16 @@ const Home: React.FC = () => {
   };
 
   // Determine the main status text to display
-  const displayMessage = isRecordingUser
-    ? (currentInterimText || "Listening...")
-    : (isThinkingAI
-      ? "Thinking..."
-      : (isSpeakingAI
-        ? (aiResponseText || "AI is speaking...")
-        : "Tap to speak"
-      )
-    );
+  let displayMessage: string;
+  if (isRecordingUser) {
+    displayMessage = currentInterimText || "Listening...";
+  } else if (isThinkingAI) {
+    displayMessage = "Thinking...";
+  } else if (isSpeakingAI) {
+    displayMessage = aiResponseText || "AI is speaking...";
+  } else {
+    displayMessage = "Tap to speak";
+  }
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
