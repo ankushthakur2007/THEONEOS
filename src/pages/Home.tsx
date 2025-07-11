@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
@@ -14,6 +14,49 @@ const Home: React.FC = () => {
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Function to start speech recognition
+  const startRecognition = useCallback(() => {
+    if (recognitionRef.current && !isRecordingUser && !isSpeakingAI) {
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        toast.error("Failed to start voice input. Please tap the mic button.");
+        setIsRecordingUser(false);
+      }
+    }
+  }, [isRecordingUser, isSpeakingAI]);
+
+  // Function to play audio and then automatically start recognition
+  const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
+    if (audioRef.current) {
+      audioRef.current.src = audioUrl;
+      setIsSpeakingAI(true);
+      setAiResponseText(aiText);
+      setCurrentInterimText('');
+
+      audioRef.current.play().catch(e => {
+        console.error("Error playing audio:", e);
+        toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
+        setIsSpeakingAI(false);
+        setAiResponseText('');
+        startRecognition(); // Try to start recognition even if audio fails
+      });
+
+      audioRef.current.onended = () => {
+        setIsSpeakingAI(false);
+        setAiResponseText('');
+        startRecognition(); // Automatically start listening for user input after AI finishes speaking
+      };
+
+      audioRef.current.onerror = () => {
+        setIsSpeakingAI(false);
+        setAiResponseText('');
+        startRecognition(); // Try to start recognition if audio errors
+      };
+    }
+  }, [startRecognition]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -61,12 +104,7 @@ const Home: React.FC = () => {
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      // If an error occurs, try to restart listening for user input
-      try {
-        recognitionRef.current?.start();
-      } catch (err) {
-        console.error("Error restarting recognition after error:", err);
-      }
+      // Do not auto-restart here, let the main flow handle it after AI response or user click
     };
 
     recognition.onend = () => {
@@ -75,15 +113,9 @@ const Home: React.FC = () => {
       if (finalTranscribedText) {
         handleTranscriptionComplete(finalTranscribedText);
       } else {
-        toast.info("No speech detected.");
+        toast.info("No speech detected. Tap the mic to speak.");
         setCurrentInterimText('');
-        // If no speech detected, automatically start listening again for user input
-        try {
-          recognitionRef.current?.start();
-        } catch (e) {
-          console.error("Error automatically starting speech recognition after no speech detected:", e);
-          toast.error("Failed to automatically restart voice input. Please tap the mic button.");
-        }
+        // Do not auto-restart here, wait for user or AI response to trigger next listening phase
       }
       finalTranscriptionRef.current = '';
     };
@@ -94,71 +126,65 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, []);
+  }, []); // No dependencies, runs once on mount
+
+  // Initial greeting and auto-start listening
+  useEffect(() => {
+    const initiateConversation = async () => {
+      if (!session?.user?.id) {
+        // Wait for session to be available
+        return;
+      }
+
+      try {
+        // Fetch user's first name
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('first_name')
+          .eq('id', session.user.id)
+          .single();
+
+        const userName = profileData?.first_name || 'there';
+        const greetingText = `Hi ${userName}! How can I help you today?`;
+
+        // Get audio for greeting
+        const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
+          body: { text: greetingText },
+        });
+
+        if (elevenLabsResponse.error) {
+          throw new Error(elevenLabsResponse.error.message);
+        }
+
+        if (!elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
+          const errorMessage = elevenLabsResponse.data?.error || JSON.stringify(elevenLabsResponse.data);
+          throw new Error(`Invalid response from Eleven Labs TTS function for greeting: ${errorMessage}`);
+        }
+
+        const audioUrl = elevenLabsResponse.data.audioUrl;
+        playAudioAndThenListen(audioUrl, greetingText); // Play greeting and then auto-start listening
+
+      } catch (error: any) {
+        console.error('Error initiating conversation:', error);
+        toast.error(`Failed to start conversation: ${error.message}. Please tap the mic button to begin.`);
+        startRecognition(); // Attempt to start recognition even if greeting fails
+      }
+    };
+
+    if (session?.user?.id) {
+      initiateConversation();
+    }
+  }, [session?.user?.id, supabase, playAudioAndThenListen, startRecognition]);
 
   const handleToggleRecording = () => {
     if (isSpeakingAI) {
-      // Cannot record while AI is speaking
       return;
     }
 
     if (isRecordingUser) {
-      // If currently recording, stop it manually
       recognitionRef.current?.stop();
     } else {
-      // If not recording, start it
-      try {
-        recognitionRef.current?.start();
-      } catch (error) {
-        console.error("Error starting speech recognition:", error);
-        toast.error("Failed to start voice input. Ensure microphone is connected and permissions are granted.");
-        setIsRecordingUser(false);
-      }
-    }
-  };
-
-  const playAudio = (audioUrl: string, aiText: string) => {
-    if (audioRef.current) {
-      audioRef.current.src = audioUrl;
-      setIsSpeakingAI(true);
-      setAiResponseText(aiText);
-      setCurrentInterimText('');
-
-      audioRef.current.play().catch(e => {
-        console.error("Error playing audio:", e);
-        toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
-        setIsSpeakingAI(false);
-        setAiResponseText('');
-        // If audio fails, try to restart listening for user input
-        try {
-          recognitionRef.current?.start();
-        } catch (err) {
-          console.error("Error restarting recognition after audio error:", err);
-        }
-      });
-
-      audioRef.current.onended = () => {
-        setIsSpeakingAI(false);
-        setAiResponseText('');
-        // Automatically start listening for user input after AI finishes speaking
-        try {
-          recognitionRef.current?.start();
-        } catch (e) {
-          console.error("Error automatically starting speech recognition after AI speech:", e);
-          toast.error("Failed to automatically restart voice input. Please tap the mic button.");
-        }
-      };
-
-      audioRef.current.onerror = () => {
-        setIsSpeakingAI(false);
-        setAiResponseText('');
-        // If audio fails, try to restart listening for user input
-        try {
-          recognitionRef.current?.start();
-        } catch (err) {
-          console.error("Error restarting recognition after audio error:", err);
-        }
-      };
+      startRecognition();
     }
   };
 
@@ -192,7 +218,7 @@ const Home: React.FC = () => {
       }
 
       const audioUrl = elevenLabsResponse.data.audioUrl;
-      playAudio(audioUrl, aiText); // Start playing audio and display AI text
+      playAudioAndThenListen(audioUrl, aiText); // Start playing audio and display AI text
 
       // 3. Store interaction in Supabase
       if (session?.user?.id) {
@@ -217,13 +243,7 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}`);
       setIsSpeakingAI(false); // Ensure AI speaking state is reset on error
       setAiResponseText(''); // Clear AI text on error
-      // Also try to restart listening for user input if an error occurs
-      try {
-        recognitionRef.current?.start();
-      } catch (e) {
-        console.error("Error automatically starting speech recognition after AI interaction error:", e);
-        toast.error("Failed to automatically restart voice input. Please tap the mic button.");
-      }
+      startRecognition(); // Attempt to start recognition even if AI interaction fails
     }
   };
 
