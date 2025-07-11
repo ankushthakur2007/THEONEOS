@@ -17,7 +17,7 @@ interface Message {
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
-  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false); // Corrected state variable name
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -106,6 +106,15 @@ const Home: React.FC = () => {
       const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mpeg' });
       playAudio(audioBlob);
 
+      // Add AI response to messages
+      const aiMessage: Message = {
+        id: Date.now().toString() + '-ai',
+        type: 'ai',
+        text: aiText,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+
       // 3. Store interaction in Supabase
       if (session?.user?.id) {
         const { error: dbError } = await supabase.from('interactions').insert({
@@ -159,24 +168,37 @@ const Home: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {messages.map((msg) => (
-                    msg.type === 'user' && (
+                    <div
+                      key={msg.id}
+                      className={`flex items-start gap-3 ${
+                        msg.type === 'user' ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      {msg.type === 'ai' && (
+                        <Avatar>
+                          <AvatarFallback>AI</AvatarFallback>
+                          {/* You can add an AvatarImage src here if you have an AI avatar */}
+                          {/* <AvatarImage src="/path/to/ai-avatar.png" /> */}
+                        </Avatar>
+                      )}
                       <div
-                        key={msg.id}
-                        className="flex items-start gap-3 justify-end"
+                        className={`p-3 rounded-lg max-w-[70%] ${
+                          msg.type === 'user'
+                            ? 'bg-blue-500 text-white rounded-br-none'
+                            : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-bl-none'
+                        }`}
                       >
-                        <div
-                          className="p-3 rounded-lg max-w-[70%] bg-blue-500 text-white rounded-br-none"
-                        >
-                          <p className="text-sm">{msg.text}</p>
-                          <span className="block text-xs mt-1 opacity-75">
-                            {msg.timestamp}
-                          </span>
-                        </div>
+                        <p className="text-sm">{msg.text}</p>
+                        <span className="block text-xs mt-1 opacity-75">
+                          {msg.timestamp}
+                        </span>
+                      </div>
+                      {msg.type === 'user' && (
                         <Avatar>
                           <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
                         </Avatar>
-                      </div>
-                    )
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -191,8 +213,8 @@ const Home: React.FC = () => {
       </div>
 
       <VoiceInputModal
-        isOpen={isVoiceModalOpen} {/* Corrected prop name */}
-        onClose={() => setIsVoiceModalOpen(false)} {/* Corrected setter name */}
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
         onTranscriptionComplete={handleTranscriptionComplete}
       />
       <audio ref={audioRef} className="hidden" />
