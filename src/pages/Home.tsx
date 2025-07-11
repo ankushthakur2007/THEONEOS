@@ -11,7 +11,6 @@ interface ChatMessage {
 
 // Define a constant for the maximum number of historical messages to fetch
 const MAX_HISTORY_MESSAGES = 5; // Reduced limit to prevent overloading the model
-const MAX_TTS_CHUNK_LENGTH = 200; // Max characters per chunk for Web Speech API
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -150,63 +149,41 @@ const Home: React.FC = () => {
       }
     };
 
-    // Split text into chunks to handle potential length limitations
-    const chunks: string[] = [];
-    for (let i = 0; i < text.length; i += MAX_TTS_CHUNK_LENGTH) {
-      chunks.push(text.substring(i, i + MAX_TTS_CHUNK_LENGTH));
-    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.pitch = 1;
+    utterance.rate = 1;
+    utterance.volume = 1;
 
-    let currentChunkIndex = 0;
+    utterance.onstart = () => {
+      console.log("Web Speech API: Speech started.");
+      setIsSpeakingAI(true);
+      setAiResponseText(text); // Keep full text for display
+      setCurrentInterimText('');
 
-    const speakNextChunk = () => {
-      if (currentChunkIndex < chunks.length) {
-        const chunk = chunks[currentChunkIndex];
-        const utterance = new SpeechSynthesisUtterance(chunk);
-        utterance.pitch = 1;
-        utterance.rate = 1;
-        utterance.volume = 1;
-
-        utterance.onstart = () => {
-          console.log(`Web Speech API: Speaking chunk ${currentChunkIndex + 1}/${chunks.length}.`);
-          setIsSpeakingAI(true);
-          setAiResponseText(text); // Keep full text for display
-          setCurrentInterimText('');
-
-          // Reset and set a new timeout for each chunk
-          if (speechTimeoutIdRef.current) {
-            clearTimeout(speechTimeoutIdRef.current);
-          }
-          speechTimeoutIdRef.current = setTimeout(() => {
-            console.warn("Web Speech API: Speech timeout reached for chunk, forcing restart of recognition.");
-            window.speechSynthesis.cancel(); // Attempt to stop any stuck speech
-            resetAndRestart();
-          }, SPEECH_TIMEOUT_MS);
-        };
-
-        utterance.onend = () => {
-          console.log(`Web Speech API: Finished chunk ${currentChunkIndex + 1}/${chunks.length}.`);
-          currentChunkIndex++;
-          if (currentChunkIndex < chunks.length) {
-            speakNextChunk(); // Speak the next chunk
-          } else {
-            // All chunks spoken
-            console.log("Web Speech API: All chunks finished.");
-            resetAndRestart();
-          }
-        };
-
-        utterance.onerror = (event) => {
-          console.error('Web Speech API error:', event.error);
-          toast.error("Browser speech synthesis failed.");
-          resetAndRestart();
-        };
-
-        window.speechSynthesis.speak(utterance);
+      // Set a timeout to ensure recognition restarts even if onend doesn't fire
+      if (speechTimeoutIdRef.current) {
+        clearTimeout(speechTimeoutIdRef.current);
       }
+      speechTimeoutIdRef.current = setTimeout(() => {
+        console.warn("Web Speech API: Speech timeout reached, forcing restart of recognition.");
+        window.speechSynthesis.cancel(); // Attempt to stop any stuck speech
+        resetAndRestart();
+      }, SPEECH_TIMEOUT_MS);
     };
 
-    console.log("Web Speech API: Attempting to speak full text (in chunks if necessary).");
-    speakNextChunk(); // Start speaking the first chunk
+    utterance.onend = () => {
+      console.log("Web Speech API: Speech ended.");
+      resetAndRestart();
+    };
+
+    utterance.onerror = (event) => {
+      console.error('Web Speech API error:', event.error);
+      toast.error("Browser speech synthesis failed.");
+      resetAndRestart();
+    };
+
+    console.log("Web Speech API: Attempting to speak full text.");
+    window.speechSynthesis.speak(utterance);
   }, [startRecognition]);
 
   // Function to handle transcription completion and AI interaction
