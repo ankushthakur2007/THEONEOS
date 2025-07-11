@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react'; // Import X icon
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -11,6 +11,7 @@ interface ChatMessage {
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
+  const [isVoiceLoopActive, setIsVoiceLoopActive] = useState(false); // New state for loop control
   const [isRecordingUser, setIsRecordingUser] = useState(false);
   const [isSpeakingAI, setIsSpeakingAI] = useState(false);
   const [isThinkingAI, setIsThinkingAI] = useState(false);
@@ -26,8 +27,6 @@ const Home: React.FC = () => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
-      // Do not clear src here, as it might be immediately set again.
-      // The new play will overwrite it.
     }
     if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
@@ -37,26 +36,29 @@ const Home: React.FC = () => {
 
   // Function to start speech recognition
   const startRecognition = useCallback(() => {
-    // Only start if not already recording, speaking, or thinking
-    if (!isRecordingUser && !isSpeakingAI && !isThinkingAI) {
-      if (recognitionRef.current) {
-        try {
-          cancelSpeech(); // Ensure any previous speech is stopped before listening
-          recognitionRef.current.start();
-        } catch (error) {
-          console.error("Error starting speech recognition:", error);
-          toast.error("Failed to start voice input. Please tap the sparkle button.");
-          setIsRecordingUser(false); // Ensure recording state is false on error
-        }
+    if (!isVoiceLoopActive) { // Only start if loop is active
+      console.log("startRecognition blocked: Voice loop is not active.");
+      return;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        cancelSpeech(); // Ensure any previous speech is stopped before listening
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        toast.error("Failed to start voice input. Please tap the sparkle button.");
+        setIsRecordingUser(false);
+        setIsVoiceLoopActive(false); // Stop loop on recognition start error
       }
     } else {
-      console.log("startRecognition blocked:", { isRecordingUser, isSpeakingAI, isThinkingAI });
+      console.warn("SpeechRecognition object not initialized.");
+      setIsVoiceLoopActive(false); // Stop loop if recognition object is null
     }
-  }, [isRecordingUser, isSpeakingAI, isThinkingAI, cancelSpeech]);
+  }, [isVoiceLoopActive, cancelSpeech]);
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
-    // cancelSpeech() is handled by startRecognition or handleToggleRecording
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
       setIsSpeakingAI(true);
@@ -70,14 +72,18 @@ const Home: React.FC = () => {
         toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text on audio playback error
-        startRecognition(); // Restart listening even if audio playback fails
+        if (isVoiceLoopActive) { // Only restart if loop is still active
+          startRecognition();
+        }
       });
 
       audioRef.current.onended = () => {
         console.log("ElevenLabs Audio: Playback ended.");
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text after speaking
-        startRecognition(); // Automatically restart listening after AI finishes speaking
+        if (isVoiceLoopActive) { // Automatically restart listening after AI finishes speaking, if loop is active
+          startRecognition();
+        }
       };
 
       audioRef.current.onerror = () => {
@@ -85,14 +91,15 @@ const Home: React.FC = () => {
         toast.error("Audio playback error.");
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text on audio error
-        startRecognition(); // Restart listening on audio error
+        if (isVoiceLoopActive) { // Restart listening on audio error, if loop is active
+          startRecognition();
+        }
       };
     }
-  }, [startRecognition]);
+  }, [isVoiceLoopActive, startRecognition]);
 
   // Function to speak using Web Speech API (fallback)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
-    // cancelSpeech() is handled by startRecognition or handleToggleRecording
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.pitch = 1;
@@ -110,7 +117,9 @@ const Home: React.FC = () => {
         console.log("Web Speech API: Speech ended.");
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text after speaking
-        startRecognition(); // Automatically restart listening after AI finishes speaking
+        if (isVoiceLoopActive) { // Automatically restart listening after AI finishes speaking, if loop is active
+          startRecognition();
+        }
       };
 
       utterance.onerror = (event) => {
@@ -118,7 +127,9 @@ const Home: React.FC = () => {
         toast.error("Browser speech synthesis failed.");
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text on Web Speech API error
-        startRecognition(); // Restart listening on Web Speech API error
+        if (isVoiceLoopActive) { // Restart listening on Web Speech API error, if loop is active
+          startRecognition();
+        }
       };
 
       console.log("Web Speech API: Attempting to speak:", text);
@@ -128,9 +139,11 @@ const Home: React.FC = () => {
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
       setAiResponseText(''); // Clear AI text if no support
-      startRecognition(); // If Web Speech API is not supported, we still need to restart recognition
+      if (isVoiceLoopActive) { // If Web Speech API is not supported, we still need to restart recognition if loop is active
+        startRecognition();
+      }
     }
-  }, [startRecognition]);
+  }, [isVoiceLoopActive, startRecognition]);
 
   // Function to handle transcription completion and AI interaction
   // This function orchestrates the AI response and subsequent TTS.
@@ -153,9 +166,6 @@ const Home: React.FC = () => {
       });
 
       if (geminiResponse.error) {
-        // If Gemini fails, we don't have AI text to speak.
-        // Set thinking to false, show error, and DO NOT automatically restart recognition.
-        // User needs to tap the button again.
         setIsThinkingAI(false);
         setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
         throw new Error(geminiResponse.error.message); // Re-throw to be caught by outer catch
@@ -167,6 +177,7 @@ const Home: React.FC = () => {
         setIsThinkingAI(false);
         toast.info("AI returned an empty response. Tap the sparkle button to try again.");
         setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
+        setIsVoiceLoopActive(false); // Stop loop if AI returns empty response
         return; // Do not proceed to TTS or restart recognition automatically
       }
 
@@ -199,9 +210,9 @@ const Home: React.FC = () => {
       }
 
       // If no TTS was attempted (shouldn't happen with current logic, but as a safeguard)
-      if (!ttsAttempted) {
+      if (!ttsAttempted && isVoiceLoopActive) {
         console.warn("No TTS method was attempted. Manually restarting recognition.");
-        startRecognition(); // Fallback if somehow no TTS path was taken
+        startRecognition(); // Fallback if somehow no TTS path was taken, and loop is active
       }
 
       // 3. Store interaction in Supabase
@@ -225,9 +236,10 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText(''); // Clear AI text on error
-      // IMPORTANT: Do NOT call startRecognition here. User must manually re-initiate.
+      setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
+      setIsVoiceLoopActive(false); // Stop loop on any major error
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, messages]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages, isVoiceLoopActive]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -276,8 +288,7 @@ const Home: React.FC = () => {
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      // If recognition errors, we need to allow the user to restart
-      startRecognition(); // Attempt to restart recognition after an error
+      setIsVoiceLoopActive(false); // Stop loop on recognition error
     };
 
     recognition.onend = () => {
@@ -287,9 +298,13 @@ const Home: React.FC = () => {
       if (finalTranscribedText) {
         processUserSpeech(finalTranscribedText); // Process the transcribed speech
       } else {
-        toast.info("No speech detected. Tap the sparkle button to speak.");
+        toast.info("No speech detected.");
         setCurrentInterimText('');
-        startRecognition(); // If no speech, go back to listening state
+        if (isVoiceLoopActive) { // If no speech, go back to listening state, if loop is active
+          startRecognition();
+        } else {
+          toast.info("Voice loop stopped."); // Inform user if loop was stopped due to no speech
+        }
       }
       finalTranscriptionRef.current = '';
     };
@@ -300,24 +315,27 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, [processUserSpeech, startRecognition]); // Add startRecognition to dependencies
+  }, [processUserSpeech, startRecognition, isVoiceLoopActive]); // Add isVoiceLoopActive to dependencies
 
-  // This function acts as the initial trigger for the voice loop.
-  const handleToggleRecording = () => {
-    if (isSpeakingAI || isThinkingAI) {
-      return; // Do nothing if AI is speaking or thinking
-    }
-
-    cancelSpeech(); // Cancel any ongoing speech before starting new recognition
-
-    if (isRecordingUser) {
-      // If currently recording, stop it. This will trigger onend.
-      recognitionRef.current?.stop();
-      toast.info("Voice input stopped.");
-    } else {
-      // If not recording, start it.
+  // Function to start the voice loop
+  const handleStartVoiceLoop = () => {
+    if (!isVoiceLoopActive) {
+      setIsVoiceLoopActive(true);
       startRecognition();
     }
+  };
+
+  // Function to stop the voice loop
+  const handleStopVoiceLoop = () => {
+    setIsVoiceLoopActive(false);
+    cancelSpeech();
+    recognitionRef.current?.stop(); // Ensure recognition is stopped
+    setIsRecordingUser(false);
+    setIsSpeakingAI(false);
+    setIsThinkingAI(false);
+    setCurrentInterimText('');
+    setAiResponseText('');
+    toast.info("Voice loop stopped.");
   };
 
   // Determine the main status text to display
@@ -330,10 +348,10 @@ const Home: React.FC = () => {
     : "Tap to speak"; // Default message when idle
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gray-900 text-white p-4">
-      <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4">
-        {/* Display message or button */}
-        {isRecordingUser || isSpeakingAI || isThinkingAI ? (
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
+      <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4 flex-grow">
+        {/* Display message or start button */}
+        {isVoiceLoopActive ? (
           <p className="text-3xl font-semibold text-gray-300 text-center">
             {displayMessage}
           </p>
@@ -342,13 +360,27 @@ const Home: React.FC = () => {
             variant="default"
             size="icon"
             className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
-            onClick={handleToggleRecording}
+            onClick={handleStartVoiceLoop}
           >
             <Sparkles className="h-36 w-36" /> {/* Increased icon size to fill button better */}
           </Button>
         )}
       </div>
       <audio ref={audioRef} className="hidden" />
+
+      {/* Stop button, visible only when the voice loop is active */}
+      {isVoiceLoopActive && (
+        <div className="absolute bottom-8">
+          <Button
+            variant="destructive"
+            size="icon"
+            className="w-16 h-16 rounded-full"
+            onClick={handleStopVoiceLoop}
+          >
+            <X className="h-8 w-8" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
