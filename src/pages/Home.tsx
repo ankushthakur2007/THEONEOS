@@ -46,16 +46,13 @@ const Home: React.FC = () => {
         toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // After AI finishes speaking (or fails), prepare for next human input
-        // This will be handled by onended/onerror, but if play() fails immediately, we need to ensure next turn.
-        // For now, let onended/onerror handle the restart.
+        startRecognition(); // Restart listening even if audio playback fails
       });
 
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // AI has finished speaking, now it's human's turn
-        // No need to call startRecognition() here, the button will be available.
+        startRecognition(); // Automatically restart listening after AI finishes speaking
       };
 
       audioRef.current.onerror = () => {
@@ -63,11 +60,10 @@ const Home: React.FC = () => {
         toast.error("Audio playback error.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // AI has finished speaking (or failed), now it's human's turn
-        // No need to call startRecognition() here, the button will be available.
+        startRecognition(); // Restart listening on audio error
       };
     }
-  }, []);
+  }, [startRecognition]);
 
   // Function to speak using Web Speech API (fallback)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
@@ -86,8 +82,7 @@ const Home: React.FC = () => {
       utterance.onend = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // AI has finished speaking, now it's human's turn
-        // No need to call startRecognition() here, the button will be available.
+        startRecognition(); // Automatically restart listening after AI finishes speaking
       };
 
       utterance.onerror = (event) => {
@@ -95,6 +90,7 @@ const Home: React.FC = () => {
         toast.error("Browser speech synthesis failed.");
         setIsSpeakingAI(false);
         setAiResponseText('');
+        startRecognition(); // Restart listening on Web Speech API error
       };
 
       window.speechSynthesis.speak(utterance);
@@ -102,8 +98,10 @@ const Home: React.FC = () => {
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
       setAiResponseText('');
+      // If Web Speech API is not supported, we still need to restart recognition
+      startRecognition();
     }
-  }, []);
+  }, [startRecognition]);
 
   // Function to handle transcription completion and AI interaction
   const handleTranscriptionComplete = useCallback(async (text: string) => {
@@ -174,10 +172,12 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
+      // If AI interaction fails, we need to restart recognition for the user to try again
+      startRecognition();
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText, startRecognition]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -190,7 +190,7 @@ const Home: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
 
-    recognition.continuous = false; // IMPORTANT CHANGE: Set to false for single utterance
+    recognition.continuous = false; // IMPORTANT: Set to false for single utterance
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -240,7 +240,7 @@ const Home: React.FC = () => {
       finalTranscriptionRef.current = '';
     };
 
-    // Removed initial startRecognition() call here. User will click button.
+    // Removed initial startRecognition() call here. User will click button to start.
 
     return () => {
       if (recognitionRef.current) {
