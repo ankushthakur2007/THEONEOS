@@ -10,7 +10,7 @@ interface ChatMessage {
 }
 
 // Define a constant for the maximum number of historical messages to fetch
-const MAX_HISTORY_MESSAGES = 10; // Re-introduced limit to prevent overloading the model
+const MAX_HISTORY_MESSAGES = 5; // Reduced limit to prevent overloading the model
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -174,7 +174,7 @@ const Home: React.FC = () => {
           .select('input_text, response_text')
           .eq('user_id', session.user.id)
           .order('timestamp', { ascending: true })
-          .limit(MAX_HISTORY_MESSAGES); // Re-introduced limit
+          .limit(MAX_HISTORY_MESSAGES); // Reduced limit
 
         if (fetchError) {
           console.error('Error fetching past interactions:', fetchError.message);
