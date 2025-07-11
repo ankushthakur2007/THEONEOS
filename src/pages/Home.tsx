@@ -60,8 +60,6 @@ const Home: React.FC = () => {
   const [isRecognitionAPIAvailable, setIsRecognitionAPIAvailable] = useState(false); // New state for API availability
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<CustomSpeechRecognition | null>(null);
-  // audioRef is no longer needed as ElevenLabs is removed
-  // const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Ref to hold the current state of isVoiceLoopActive for stable callbacks
   const isVoiceLoopActiveRef = useRef(isVoiceLoopActive);
@@ -75,7 +73,6 @@ const Home: React.FC = () => {
 
   // Helper function to cancel any ongoing speech (browser or audio element)
   const cancelSpeech = useCallback(() => {
-    // Removed audioRef related pause/currentTime
     if ((window as CustomWindow).speechSynthesis && (window as CustomWindow).speechSynthesis?.speaking) {
       (window as CustomWindow).speechSynthesis?.cancel();
       console.log("SpeechSynthesis: Canceled existing speech.");
@@ -98,7 +95,7 @@ const Home: React.FC = () => {
 
     // Explicitly stop any ongoing recognition before attempting to start a new one
     // This is crucial for preventing InvalidStateError
-    if (recognitionRef.current.recognizing || (recognitionRef.current as any).readyState === SpeechRecognition.State.ACTIVE) {
+    if (recognitionRef.current.recognizing) { // Simplified check
       recognitionRef.current.stop();
       console.log("SpeechRecognition: Forced stop before new start.");
     }
@@ -118,8 +115,6 @@ const Home: React.FC = () => {
       }
     }, 500); // Increased delay to 500ms
   }, [cancelSpeech]);
-
-  // Removed playAudioAndThenListen as ElevenLabs is no longer used
 
   // Function to speak using Web Speech API (now primary TTS)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
@@ -194,8 +189,6 @@ const Home: React.FC = () => {
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
 
     let aiText = '';
-    // audioUrl is no longer needed
-    // let audioUrl: string | null = null;
 
     try {
       let conversationHistory: ChatMessage[] = [];
@@ -258,8 +251,6 @@ const Home: React.FC = () => {
           user_id: session.user.id,
           input_text: text,
           response_text: aiText,
-          // audio_url is no longer relevant
-          // audio_url: audioUrl,
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
@@ -448,9 +439,6 @@ const Home: React.FC = () => {
           </Button>
         )}
       </div>
-      {/* Removed audio element as ElevenLabs is no longer used */}
-      {/* <audio ref={audioRef} className="hidden" /> */}
-
       {isVoiceLoopActive && (
         <div className="absolute bottom-8">
           <Button
