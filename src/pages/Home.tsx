@@ -229,10 +229,10 @@ const Home: React.FC = () => {
           <Button
             variant="default"
             size="icon"
-            className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
+            className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
             onClick={handleToggleRecording}
           >
-            <Sparkles className="h-12 w-12" />
+            <Sparkles className="h-16 w-16" />
           </Button>
         )}
       </div>
