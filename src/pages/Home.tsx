@@ -182,9 +182,9 @@ const Home: React.FC = () => {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
       {/* Live transcription text or AI response text in the center */}
-      <div className="flex-grow flex items-center justify-center">
+      <div className="flex-grow flex items-center justify-center w-full max-w-3xl px-4 overflow-y-auto max-h-[calc(100vh-200px)]">
         {(currentInterimText || aiResponseText) && (
-          <p className="text-3xl font-semibold text-gray-300 text-center px-4 max-w-3xl">
+          <p className="text-3xl font-semibold text-gray-300 text-center">
             {currentInterimText || aiResponseText}
           </p>
         )}

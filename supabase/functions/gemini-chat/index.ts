@@ -22,7 +22,11 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const result = await model.generateContent(prompt);
+    // Add a system instruction to encourage shorter, optimized responses
+    const result = await model.generateContent([
+      { text: "You are a concise and helpful AI assistant. Provide short, direct, and optimized responses, typically under 100 words, unless a longer explanation is explicitly requested. Focus on the most important information." },
+      { text: prompt }
+    ]);
     const response = await result.response;
     const text = response.text();
 
