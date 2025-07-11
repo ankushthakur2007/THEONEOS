@@ -16,7 +16,8 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   onTranscriptionComplete,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [recordedText, setRecordedText] = useState('');
+  const [currentInterimText, setCurrentInterimText] = useState(''); // To display interim results
+  const finalTranscriptionRef = useRef<string>(''); // To store the final accumulated text
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
@@ -36,40 +37,49 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
 
     recognition.onstart = () => {
       setIsRecording(true);
-      setRecordedText(''); // Clear previous text
+      setCurrentInterimText(''); // Clear displayed text
+      finalTranscriptionRef.current = ''; // Reset final text
       toast.info("Voice input started. Please speak clearly.");
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interimTranscript = '';
-      let finalTranscript = '';
+      let currentFinalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += transcript;
+          currentFinalTranscript += transcript;
         } else {
           interimTranscript += transcript;
         }
       }
-      // Display final transcript if available, otherwise interim
-      setRecordedText(finalTranscript || interimTranscript);
+      
+      // Accumulate final transcript in the ref
+      finalTranscriptionRef.current += currentFinalTranscript;
+      // Display current interim + accumulated final for the user
+      setCurrentInterimText(finalTranscriptionRef.current + interimTranscript);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
       toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions.`);
       setIsRecording(false);
+      finalTranscriptionRef.current = ''; // Clear on error
     };
 
     recognition.onend = () => {
       setIsRecording(false);
-      if (recordedText) {
-        onTranscriptionComplete(recordedText);
+      const finalTranscribedText = finalTranscriptionRef.current.trim(); // Get the accumulated final text
+
+      if (finalTranscribedText) {
+        onTranscriptionComplete(finalTranscribedText);
         toast.success("Voice input stopped. Text transcribed.");
       } else {
         toast.info("No speech detected or transcription failed.");
       }
+      finalTranscriptionRef.current = ''; // Reset for next session
+      setCurrentInterimText(''); // Clear displayed text
     };
 
     // Cleanup function: stop recognition if component unmounts or modal closes
@@ -88,7 +98,8 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
       if (recognitionRef.current && isRecording) {
         recognitionRef.current.stop();
       }
-      setRecordedText('');
+      setCurrentInterimText('');
+      finalTranscriptionRef.current = ''; // Ensure ref is cleared on close
       setIsRecording(false);
     }
   }, [isOpen, isRecording]);
@@ -96,7 +107,8 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
   const handleStartRecording = () => {
     if (recognitionRef.current && !isRecording) {
       try {
-        setRecordedText(''); // Clear previous text before starting new recording
+        setCurrentInterimText(''); // Clear displayed text before starting new recording
+        finalTranscriptionRef.current = ''; // Clear final text ref
         recognitionRef.current.start();
       } catch (error) {
         console.error("Error starting speech recognition:", error);
@@ -141,9 +153,9 @@ const VoiceInputModal: React.FC<VoiceInputModalProps> = ({
               <Mic className="h-12 w-12" />
             </Button>
           )}
-          {recordedText && (
+          {currentInterimText && (
             <p className="mt-4 text-lg text-gray-800 dark:text-gray-200 text-center px-4">
-              {recordedText}
+              {currentInterimText}
             </p>
           )}
         </div>
