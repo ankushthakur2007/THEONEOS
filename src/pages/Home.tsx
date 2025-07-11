@@ -164,21 +164,21 @@ const Home: React.FC = () => {
 
       const aiText = geminiResponse.data.text;
 
-      // 2. Call TTS Orchestrator Edge Function (handles ElevenLabs and Play.ht fallback)
-      const ttsResponse = await supabase.functions.invoke('tts-orchestrator', {
+      // 2. Call Eleven Labs TTS Edge Function directly
+      const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
         body: { text: aiText },
       });
 
-      if (ttsResponse.error) {
-        throw new Error(ttsResponse.error.message);
+      if (elevenLabsResponse.error) {
+        throw new Error(elevenLabsResponse.error.message);
       }
 
-      if (!ttsResponse.data || typeof ttsResponse.data !== 'object' || !ttsResponse.data.audioUrl) {
-        const errorMessage = ttsResponse.data?.error || JSON.stringify(ttsResponse.data);
-        throw new Error(`Invalid response from TTS orchestrator function: ${errorMessage}`);
+      if (!elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
+        const errorMessage = elevenLabsResponse.data?.error || JSON.stringify(elevenLabsResponse.data);
+        throw new Error(`Invalid response from Eleven Labs TTS function: ${errorMessage}`);
       }
 
-      const audioUrl = ttsResponse.data.audioUrl;
+      const audioUrl = elevenLabsResponse.data.audioUrl;
       playAudioAndThenListen(audioUrl, aiText);
 
       // 3. Store interaction in Supabase
