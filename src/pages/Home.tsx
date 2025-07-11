@@ -46,7 +46,7 @@ const Home: React.FC = () => {
         toast.error(`Audio playback failed: ${e.message}. Tap the sparkle button to speak.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // No automatic restart here, return to idle
+        startRecognition(); // Restart listening even if audio playback fails
       });
 
       audioRef.current.onended = () => {
@@ -60,7 +60,7 @@ const Home: React.FC = () => {
         toast.error("Audio playback error. Tap the sparkle button to speak.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // No automatic restart here, return to idle
+        startRecognition(); // Restart listening on audio error
       };
     }
   }, [startRecognition]);
@@ -93,6 +93,7 @@ const Home: React.FC = () => {
         toast.error("Browser speech synthesis failed.");
         setIsSpeakingAI(false);
         setAiResponseText('');
+        startRecognition(); // Restart listening on Web Speech API error
       };
 
       window.speechSynthesis.speak(utterance);
@@ -100,6 +101,7 @@ const Home: React.FC = () => {
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
       setAiResponseText('');
+      startRecognition(); // Restart listening if Web Speech API is not supported
     }
   }, [startRecognition]);
 
@@ -172,10 +174,11 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
+      startRecognition(); // Restart listening on AI interaction error
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText, startRecognition]); // Added startRecognition to dependencies
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -218,12 +221,12 @@ const Home: React.FC = () => {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Tap the sparkle button to try again.`);
+      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Attempting to restart.`);
       setIsRecordingUser(false);
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      // No automatic restart here, return to idle
+      startRecognition(); // Automatically restart listening on error
     };
 
     recognition.onend = () => {
@@ -232,9 +235,9 @@ const Home: React.FC = () => {
       if (finalTranscribedText) {
         handleTranscriptionComplete(finalTranscribedText);
       } else {
-        toast.info("No speech detected. Tap the sparkle button to speak.");
+        toast.info("No speech detected. Restarting listening.");
         setCurrentInterimText('');
-        // No automatic restart here, return to idle
+        startRecognition(); // Automatically restart listening even if no speech was detected
       }
       finalTranscriptionRef.current = '';
     };
@@ -245,7 +248,7 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, [handleTranscriptionComplete]);
+  }, [handleTranscriptionComplete, startRecognition]); // Added startRecognition to dependencies
 
   const handleToggleRecording = () => {
     if (isSpeakingAI || isThinkingAI) {
