@@ -17,7 +17,7 @@ interface Message {
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
-  const [isVoiceModalOpen, setIsVoiceModal] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false); // Corrected state variable name
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -31,7 +31,7 @@ const Home: React.FC = () => {
   };
 
   const handleOpenVoiceInput = () => {
-    setIsVoiceModal(true);
+    setIsVoiceModalOpen(true);
   };
 
   const playAudio = (audioBlob: Blob) => {
@@ -49,7 +49,7 @@ const Home: React.FC = () => {
   };
 
   const handleTranscriptionComplete = async (text: string) => {
-    setIsVoiceModal(false);
+    setIsVoiceModalOpen(false);
     if (!text.trim()) {
       toast.info("No speech detected or transcription was empty.");
       return;
@@ -191,8 +191,8 @@ const Home: React.FC = () => {
       </div>
 
       <VoiceInputModal
-        isOpen={isVoiceModal}
-        onClose={() => setIsVoiceModal(false)}
+        isOpen={isVoiceModalOpen} {/* Corrected prop name */}
+        onClose={() => setIsVoiceModalOpen(false)} {/* Corrected setter name */}
         onTranscriptionComplete={handleTranscriptionComplete}
       />
       <audio ref={audioRef} className="hidden" />
