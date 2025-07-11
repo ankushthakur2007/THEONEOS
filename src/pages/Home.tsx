@@ -153,9 +153,22 @@ const Home: React.FC = () => {
       });
 
       if (geminiResponse.error) {
-        throw new Error(geminiResponse.error.message);
+        // If Gemini fails, we don't have AI text to speak.
+        // Set thinking to false, show error, and DO NOT automatically restart recognition.
+        // User needs to tap the button again.
+        setIsThinkingAI(false);
+        setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
+        throw new Error(geminiResponse.error.message); // Re-throw to be caught by outer catch
       }
       aiText = geminiResponse.data.text;
+
+      // If aiText is empty, there's nothing to speak.
+      if (!aiText) {
+        setIsThinkingAI(false);
+        toast.info("AI returned an empty response. Tap the sparkle button to try again.");
+        setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
+        return; // Do not proceed to TTS or restart recognition automatically
+      }
 
       // Set AI response text immediately for display, and stop thinking state
       setAiResponseText(aiText);
@@ -212,10 +225,9 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText(''); // Clear AI text on error
-      setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
-      startRecognition(); // If there's an error before TTS even starts, go back to listening
+      // IMPORTANT: Do NOT call startRecognition here. User must manually re-initiate.
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, startRecognition, messages]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, messages]);
 
   // Initialize Speech Recognition
   useEffect(() => {
