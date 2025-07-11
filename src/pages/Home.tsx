@@ -36,11 +36,9 @@ const Home: React.FC = () => {
 
   // Function to start speech recognition
   const startRecognition = useCallback(() => {
-    if (!isVoiceLoopActive) { // Only start if loop is active
-      console.log("startRecognition blocked: Voice loop is not active.");
-      return;
-    }
-
+    // Removed the `if (!isVoiceLoopActive)` check here.
+    // The decision to loop is now handled by the callers (onend/onerror callbacks)
+    // and the initial call from handleStartVoiceLoop.
     if (recognitionRef.current) {
       try {
         cancelSpeech(); // Ensure any previous speech is stopped before listening
@@ -55,7 +53,7 @@ const Home: React.FC = () => {
       console.warn("SpeechRecognition object not initialized.");
       setIsVoiceLoopActive(false); // Stop loop if recognition object is null
     }
-  }, [isVoiceLoopActive, cancelSpeech]);
+  }, [cancelSpeech]); // Removed isVoiceLoopActive from dependencies here.
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
@@ -321,7 +319,7 @@ const Home: React.FC = () => {
   const handleStartVoiceLoop = () => {
     if (!isVoiceLoopActive) {
       setIsVoiceLoopActive(true);
-      startRecognition();
+      startRecognition(); // Directly call startRecognition here
     }
   };
 
