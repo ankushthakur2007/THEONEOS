@@ -82,7 +82,7 @@ const Home: React.FC = () => {
         setIsVoiceLoopActive(false); // Stop loop on recognition start error
       }
     }, 500); // Increased delay to 500ms
-  }, [cancelSpeech]);
+  }, [cancelSpeech]); // Removed isRecordingUser from dependencies to stabilize this callback
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
@@ -361,12 +361,22 @@ const Home: React.FC = () => {
 
   // Initialize Speech Recognition (this useEffect should only run once for setup)
   useEffect(() => {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    // Check for browser support
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
       return;
     }
 
+    // Get the SpeechRecognition constructor
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    // If for some reason it's still not a function (e.g., null, undefined, or not a constructor)
+    if (typeof SpeechRecognition !== 'function') {
+      console.error("SpeechRecognition API found but is not a valid constructor.");
+      toast.error("Voice input API is not fully functional in your browser.");
+      return;
+    }
+
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
 
@@ -392,7 +402,7 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, [handleRecognitionResult, handleRecognitionError, handleRecognitionEnd]);
+  }, [handleRecognitionResult, handleRecognitionError, handleRecognitionEnd]); // Dependencies are now stable callbacks
 
   // Effect to manage the voice loop: starts recognition when active, stops when inactive
   useEffect(() => {
