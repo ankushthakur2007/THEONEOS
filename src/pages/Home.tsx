@@ -281,12 +281,25 @@ const Home: React.FC = () => {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Tap the sparkle button to try again.`);
       setIsRecordingUser(false);
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      setIsVoiceLoopActive(false); // Stop loop on recognition error
+
+      if (event.error === 'no-speech') {
+        toast.info("No speech detected, listening again...");
+        if (isVoiceLoopActive) { // Only restart if loop is active
+          startRecognition();
+        } else {
+          toast.info("Voice loop stopped.");
+        }
+      } else if (event.error === 'not-allowed') {
+        toast.error("Microphone access denied. Please enable microphone permissions.");
+        setIsVoiceLoopActive(false); // Stop loop if permission is denied
+      } else {
+        toast.error(`Speech recognition error: ${event.error}. Tap the sparkle button to try again.`);
+        setIsVoiceLoopActive(false); // Stop loop on other errors
+      }
     };
 
     recognition.onend = () => {
