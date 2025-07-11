@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Sparkles, StopCircle } from 'lucide-react';
+import { Sparkles } from 'lucide-react'; // Removed StopCircle as it's not used
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -17,13 +17,16 @@ const Home: React.FC = () => {
 
   // Function to start speech recognition
   const startRecognition = useCallback(() => {
-    if (recognitionRef.current && !isRecordingUser && !isSpeakingAI && !isThinkingAI) {
-      try {
-        recognitionRef.current.start();
-      } catch (error) {
-        console.error("Error starting speech recognition:", error);
-        toast.error("Failed to start voice input. Please tap the sparkle button.");
-        setIsRecordingUser(false);
+    // Only start if not already recording, speaking, or thinking
+    if (!isRecordingUser && !isSpeakingAI && !isThinkingAI) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          console.error("Error starting speech recognition:", error);
+          toast.error("Failed to start voice input. Please tap the sparkle button.");
+          setIsRecordingUser(false); // Ensure recording state is false on error
+        }
       }
     }
   }, [isRecordingUser, isSpeakingAI, isThinkingAI]);
@@ -37,11 +40,10 @@ const Home: React.FC = () => {
       setCurrentInterimText('');
 
       audioRef.current.play().then(() => {
-        // Audio started playing successfully, nothing to do here yet.
-        // The onended/onerror handlers will manage the next state.
+        // Audio started playing successfully
       }).catch(e => {
         console.error("Error attempting to play audio:", e);
-        toast.error(`Audio playback failed: ${e.message}. You may need to tap the sparkle button to start.`);
+        toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
         startRecognition(); // Try to start recognition even if audio fails
@@ -73,7 +75,7 @@ const Home: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
 
-    recognition.continuous = false; // Still false for single utterance
+    recognition.continuous = false; // For single utterance, then restart
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -108,13 +110,8 @@ const Home: React.FC = () => {
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      // If an error occurs, try to restart listening for user input to maintain the loop
-      try {
-        recognitionRef.current?.start();
-      } catch (err) {
-        console.error("Error restarting recognition after error:", err);
-        toast.error("Failed to automatically restart voice input. Please tap the sparkle button.");
-      }
+      // Attempt to restart recognition after an error
+      startRecognition();
     };
 
     recognition.onend = () => {
@@ -123,16 +120,10 @@ const Home: React.FC = () => {
       if (finalTranscribedText) {
         handleTranscriptionComplete(finalTranscribedText);
       } else {
-        toast.info("No speech detected. AI is waiting for your input.");
+        toast.info("No speech detected. Ready for your input.");
         setCurrentInterimText('');
         // If no speech detected, automatically try to start listening again
-        // This ensures the continuous loop even if user doesn't speak
-        try {
-          recognitionRef.current?.start();
-        } catch (e) {
-          console.error("Error automatically starting speech recognition after no speech detected:", e);
-          toast.error("Failed to automatically restart voice input. Please tap the sparkle button.");
-        }
+        startRecognition();
       }
       finalTranscriptionRef.current = '';
     };
@@ -143,11 +134,11 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, []);
+  }, [startRecognition]); // Added startRecognition to dependencies
 
   const handleToggleRecording = () => {
     if (isSpeakingAI || isThinkingAI) {
-      return;
+      return; // Do nothing if AI is speaking or thinking
     }
 
     if (isRecordingUser) {
@@ -210,31 +201,43 @@ const Home: React.FC = () => {
     } catch (error: any) {
       console.error('Error interacting with AI or TTS:', error);
       toast.error(`Failed to get AI response: ${error.message}`);
-      setIsSpeakingAI(false);
+      setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
-      startRecognition();
+      startRecognition(); // Attempt to restart recognition after an error
     } finally {
       setIsThinkingAI(false);
     }
   };
 
+  // Determine the main status text to display
+  const mainStatusText = isRecordingUser
+    ? "Listening..."
+    : isSpeakingAI
+    ? "AI is speaking..."
+    : isThinkingAI
+    ? "Thinking..."
+    : currentInterimText || aiResponseText; // Show transcription or AI response if available
+
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-gray-900 text-white p-4">
-      {/* Conditional rendering for text or button, both centered */}
-      {(currentInterimText || aiResponseText || isThinkingAI) ? (
-        <p className="text-3xl font-semibold text-gray-300 text-center">
-          {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : (isThinkingAI ? "Thinking..." : ""))}
-        </p>
-      ) : (
-        <Button
-          variant="default"
-          size="icon"
-          className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
-          onClick={handleToggleRecording}
-        >
-          <Sparkles className="h-12 w-12" />
-        </Button>
-      )}
+      <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4">
+        {/* Display main status text or transcription/AI response */}
+        {mainStatusText ? (
+          <p className="text-3xl font-semibold text-gray-300 text-center">
+            {mainStatusText}
+          </p>
+        ) : (
+          // Display the button when idle
+          <Button
+            variant="default"
+            size="icon"
+            className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
+            onClick={handleToggleRecording}
+          >
+            <Sparkles className="h-12 w-12" />
+          </Button>
+        )}
+      </div>
       <audio ref={audioRef} className="hidden" />
     </div>
   );
