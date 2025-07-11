@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Sparkles, StopCircle } from 'lucide-react'; // Changed Star to Sparkles
+import { Sparkles, StopCircle } from 'lucide-react';
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -220,32 +220,21 @@ const Home: React.FC = () => {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-gray-900 text-white p-4">
-      <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4">
-        {/* Live transcription text, AI response text, or Thinking text */}
-        {(currentInterimText || aiResponseText || isThinkingAI) && (
-          <p className="text-3xl font-semibold text-gray-300 text-center mb-8">
-            {isThinkingAI ? "Thinking..." : (currentInterimText || aiResponseText)}
-          </p>
-        )}
-
-        {/* Microphone button */}
-        <div className="relative flex flex-col items-center justify-center">
-          {/* Only show the button when neither recording, speaking, nor thinking */}
-          {!isRecordingUser && !isSpeakingAI && !isThinkingAI && (
-            <Button
-              variant="default"
-              size="icon"
-              className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
-              onClick={handleToggleRecording}
-            >
-              <Sparkles className="h-12 w-12" />
-            </Button>
-          )}
-          <p className="text-sm text-gray-400 mt-4">
-            {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : (isThinkingAI ? "AI is thinking..." : "Tap to speak"))}
-          </p>
-        </div>
-      </div>
+      {/* Conditional rendering for text or button, both centered */}
+      {(currentInterimText || aiResponseText || isThinkingAI) ? (
+        <p className="text-3xl font-semibold text-gray-300 text-center">
+          {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : (isThinkingAI ? "Thinking..." : ""))}
+        </p>
+      ) : (
+        <Button
+          variant="default"
+          size="icon"
+          className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
+          onClick={handleToggleRecording}
+        >
+          <Sparkles className="h-12 w-12" />
+        </Button>
+      )}
       <audio ref={audioRef} className="hidden" />
     </div>
   );
