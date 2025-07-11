@@ -52,7 +52,7 @@ const Home: React.FC = () => {
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // No automatic restart here, return to idle
+        startRecognition(); // Automatically restart listening after AI finishes speaking
       };
 
       audioRef.current.onerror = () => {
@@ -63,7 +63,7 @@ const Home: React.FC = () => {
         // No automatic restart here, return to idle
       };
     }
-  }, []);
+  }, [startRecognition]); // Add startRecognition to dependencies
 
   // Function to speak using Web Speech API (fallback)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
@@ -85,6 +85,7 @@ const Home: React.FC = () => {
       utterance.onend = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
+        startRecognition(); // Automatically restart listening after AI finishes speaking
       };
 
       utterance.onerror = (event) => {
@@ -100,7 +101,7 @@ const Home: React.FC = () => {
       setIsSpeakingAI(false);
       setAiResponseText('');
     }
-  }, []);
+  }, [startRecognition]); // Add startRecognition to dependencies
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -170,7 +171,7 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, []);
+  }, [handleTranscriptionComplete]); // Add handleTranscriptionComplete to dependencies
 
   const handleToggleRecording = () => {
     if (isSpeakingAI || isThinkingAI) {
