@@ -2,36 +2,32 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import VoiceInputModal from '@/components/VoiceInputModal';
+import { toast } from 'sonner';
 
 const Home: React.FC = () => {
   const { supabase } = useSession();
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedText, setRecordedText] = useState('');
+  const [transcribedText, setTranscribedText] = useState(''); // State to hold the transcribed text
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('Error logging out:', error.message);
+      toast.error('Failed to log out.');
     }
     // The SessionContextProvider will handle the redirect to /login
   };
 
-  const handleStartVoiceInput = () => {
+  const handleOpenVoiceInput = () => {
     setIsVoiceModalOpen(true);
-    // Placeholder for actual voice recording logic
-    // For now, we'll simulate recording
-    setIsRecording(true);
-    setRecordedText('');
-    setTimeout(() => {
-      setIsRecording(false);
-      setRecordedText("This is a simulated voice input. Actual speech-to-text coming soon!");
-    }, 3000); // Simulate 3 seconds of recording
+    setTranscribedText(''); // Clear any previous transcription when opening the modal
   };
 
-  const handleStopRecording = () => {
-    setIsRecording(false);
-    // In a real scenario, this would stop the microphone and process the audio
+  const handleTranscriptionComplete = (text: string) => {
+    setTranscribedText(text);
+    console.log("Transcription completed:", text);
+    toast.success(`Transcribed: "${text}"`);
+    // You can now use this 'text' for further processing, e.g., sending it to an AI backend
   };
 
   return (
@@ -44,22 +40,25 @@ const Home: React.FC = () => {
           Your cross-platform smart assistant. Get ready to interact with AI, control your devices, and manage your smart home.
         </p>
         <div className="flex justify-center space-x-4">
-          <Button onClick={handleStartVoiceInput} className="px-8 py-4 text-lg">
+          <Button onClick={handleOpenVoiceInput} className="px-8 py-4 text-lg">
             Start Voice Input
           </Button>
           <Button variant="outline" onClick={handleLogout} className="px-8 py-4 text-lg">
             Logout
           </Button>
         </div>
+        {transcribedText && (
+          <div className="mt-8 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md max-w-xl mx-auto">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">Last Transcribed Text:</h2>
+            <p className="text-lg text-gray-700 dark:text-gray-300 italic">"{transcribedText}"</p>
+          </div>
+        )}
       </div>
 
       <VoiceInputModal
         isOpen={isVoiceModalOpen}
         onClose={() => setIsVoiceModalOpen(false)}
-        onStartRecording={handleStartVoiceInput} // This will restart the simulation
-        onStopRecording={handleStopRecording}
-        isRecording={isRecording}
-        recordedText={recordedText}
+        onTranscriptionComplete={handleTranscriptionComplete}
       />
     </div>
   );
