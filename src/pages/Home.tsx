@@ -9,6 +9,9 @@ interface ChatMessage {
   parts: { text: string }[];
 }
 
+// Define a constant for the maximum number of historical messages to fetch
+const MAX_HISTORY_MESSAGES = 10; // Fetch 5 user messages and 5 AI responses
+
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const [isVoiceLoopActive, setIsVoiceLoopActive] = useState(false);
@@ -17,7 +20,7 @@ const Home: React.FC = () => {
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]); // State for conversation history
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -155,20 +158,47 @@ const Home: React.FC = () => {
     setAiResponseText('');
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
-    const updatedMessagesForAI = [...messages, newUserMessage];
+    // Optimistically add user message to local state for immediate display
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
 
     let aiText = '';
     let audioUrl: string | null = null;
 
     try {
+      let conversationHistory: ChatMessage[] = [];
+
+      // Fetch past interactions for memory
+      if (session?.user?.id) {
+        const { data: pastInteractions, error: fetchError } = await supabase
+          .from('interactions')
+          .select('input_text, response_text')
+          .eq('user_id', session.user.id)
+          .order('timestamp', { ascending: true })
+          .limit(MAX_HISTORY_MESSAGES); // Limit to a reasonable number of messages
+
+        if (fetchError) {
+          console.error('Error fetching past interactions:', fetchError.message);
+          toast.error('Failed to load conversation history.');
+          // Continue without history if there's an error
+        } else if (pastInteractions) {
+          // Format fetched interactions into Gemini's expected history format
+          conversationHistory = pastInteractions.flatMap(interaction => [
+            { role: 'user', parts: [{ text: interaction.input_text }] },
+            { role: 'model', parts: [{ text: interaction.response_text }] },
+          ]);
+        }
+      }
+
+      // Combine fetched history with the current user message for the AI
+      const fullHistoryForAI = [...conversationHistory, newUserMessage];
+
       const geminiResponse = await supabase.functions.invoke('gemini-chat', {
-        body: { prompt: text, history: updatedMessagesForAI },
+        body: { prompt: text, history: fullHistoryForAI }, // Pass the full history
       });
 
       if (geminiResponse.error) {
         setIsThinkingAI(false);
-        setMessages(prevMessages => prevMessages.slice(0, -1));
+        setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message on error
         throw new Error(geminiResponse.error.message);
       }
       aiText = geminiResponse.data.text;
@@ -176,7 +206,7 @@ const Home: React.FC = () => {
       if (!aiText) {
         setIsThinkingAI(false);
         toast.info("AI returned an empty response. Listening again...");
-        setMessages(prevMessages => prevMessages.slice(0, -1));
+        setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
         if (isVoiceLoopActiveRef.current) { // Use ref
           startRecognition();
         }
@@ -214,6 +244,7 @@ const Home: React.FC = () => {
         startRecognition();
       }
 
+      // Save the new interaction to the database (including the AI's response)
       if (session?.user?.id) {
         const { error: dbError } = await supabase.from('interactions').insert({
           user_id: session.user.id,
@@ -234,7 +265,7 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Listening again...`);
       setIsSpeakingAI(false);
       setAiResponseText('');
-      setMessages(prevMessages => prevMessages.slice(0, -1));
+      setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message on error
       if (isVoiceLoopActiveRef.current) { // Use ref
         startRecognition();
       }
