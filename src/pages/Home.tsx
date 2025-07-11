@@ -4,6 +4,42 @@ import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
 import { Sparkles, X } from 'lucide-react'; // Import X icon
 
+// Define custom interfaces for SpeechRecognition and related types
+// This helps prevent ReferenceErrors if the browser's global types are not fully exposed
+interface CustomSpeechRecognition extends EventTarget {
+  grammars: SpeechGrammarList;
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  serviceURI: string;
+
+  onaudiostart: ((this: CustomSpeechRecognition, ev: Event) => any) | null;
+  onresult: ((this: CustomSpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onend: ((this: CustomSpeechRecognition, ev: Event) => any) | null;
+  onerror: ((this: CustomSpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onnomatch: ((this: CustomSpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onsoundstart: ((this: CustomSpeechRecognition, ev: Event) => any) | null;
+  onsoundend: ((this: CustomSpeechRecognition, ev: Event) => any) | null;
+  onspeechstart: ((this: CustomSpeechRecognition, ev: Event) => any) | null;
+  onspeechend: ((this: CustomSpeechRecognition, ev: Event) => any) | null;
+  onstart: ((this: CustomSpeechRecognition, ev: Event) => any) | null;
+
+  start(): void;
+  stop(): void;
+  abort(): void;
+  recognizing?: boolean; // Common non-standard property
+  readyState?: number; // Common non-standard property
+}
+
+interface CustomWindow extends Window {
+  SpeechRecognition?: new () => CustomSpeechRecognition;
+  webkitSpeechRecognition?: new () => CustomSpeechRecognition;
+  SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance;
+  speechSynthesis?: SpeechSynthesis;
+}
+
+
 interface ChatMessage {
   role: 'user' | 'model';
   parts: { text: string }[];
@@ -23,7 +59,7 @@ const Home: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]); // State for conversation history
   const [isRecognitionAPIAvailable, setIsRecognitionAPIAvailable] = useState(false); // New state for API availability
   const finalTranscriptionRef = useRef<string>('');
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<CustomSpeechRecognition | null>(null);
   // audioRef is no longer needed as ElevenLabs is removed
   // const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -40,8 +76,8 @@ const Home: React.FC = () => {
   // Helper function to cancel any ongoing speech (browser or audio element)
   const cancelSpeech = useCallback(() => {
     // Removed audioRef related pause/currentTime
-    if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
+    if ((window as CustomWindow).speechSynthesis && (window as CustomWindow).speechSynthesis?.speaking) {
+      (window as CustomWindow).speechSynthesis?.cancel();
       console.log("SpeechSynthesis: Canceled existing speech.");
     }
     // Clear the timeout if speech is cancelled manually
@@ -87,7 +123,7 @@ const Home: React.FC = () => {
 
   // Function to speak using Web Speech API (now primary TTS)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
-    if (!('speechSynthesis' in window)) {
+    if (!((window as CustomWindow).speechSynthesis && (window as CustomWindow).SpeechSynthesisUtterance)) {
       console.warn("Web Speech API: Not supported.");
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
@@ -110,7 +146,7 @@ const Home: React.FC = () => {
       }
     };
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new (window as CustomWindow).SpeechSynthesisUtterance!(text);
     utterance.pitch = 1;
     utterance.rate = 1;
     utterance.volume = 1;
@@ -127,7 +163,7 @@ const Home: React.FC = () => {
       }
       speechTimeoutIdRef.current = setTimeout(() => {
         console.warn("Web Speech API: Speech timeout reached, forcing restart of recognition.");
-        window.speechSynthesis.cancel(); // Attempt to stop any stuck speech
+        (window as CustomWindow).speechSynthesis?.cancel(); // Attempt to stop any stuck speech
         resetAndRestart();
       }, SPEECH_TIMEOUT_MS);
     };
@@ -144,7 +180,7 @@ const Home: React.FC = () => {
     };
 
     console.log("Web Speech API: Attempting to speak full text.");
-    window.speechSynthesis.speak(utterance);
+    (window as CustomWindow).speechSynthesis?.speak(utterance);
   }, [startRecognition]);
 
   // Function to handle transcription completion and AI interaction
@@ -304,13 +340,7 @@ const Home: React.FC = () => {
         return;
       }
 
-      let SpeechRecognitionConstructor: typeof SpeechRecognition | undefined;
-
-      if (typeof window.SpeechRecognition === 'function') {
-        SpeechRecognitionConstructor = window.SpeechRecognition;
-      } else if (typeof (window as any).webkitSpeechRecognition === 'function') {
-        SpeechRecognitionConstructor = (window as any).webkitSpeechRecognition;
-      }
+      const SpeechRecognitionConstructor = (window as CustomWindow).SpeechRecognition || (window as CustomWindow).webkitSpeechRecognition;
 
       if (!SpeechRecognitionConstructor) {
         console.error("Speech recognition API not found or not a valid constructor.");
