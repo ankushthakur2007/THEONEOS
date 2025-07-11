@@ -31,7 +31,7 @@ const Home: React.FC = () => {
     }
   }, [isRecordingUser, isSpeakingAI, isThinkingAI]);
 
-  // Function to play audio and then transition to idle state
+  // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
@@ -62,6 +62,43 @@ const Home: React.FC = () => {
         setAiResponseText('');
         // No automatic restart here, return to idle
       };
+    }
+  }, []);
+
+  // Function to speak using Web Speech API (fallback)
+  const speakWithWebSpeechAPI = useCallback((text: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      // Optional: Set voice, pitch, rate, volume if needed
+      // const voices = window.speechSynthesis.getVoices();
+      // utterance.voice = voices.find(voice => voice.lang === 'en-US') || voices[0]; // Try to find an English voice
+      utterance.pitch = 1;
+      utterance.rate = 1;
+      utterance.volume = 1;
+
+      utterance.onstart = () => {
+        setIsSpeakingAI(true);
+        setAiResponseText(text);
+        setCurrentInterimText('');
+      };
+
+      utterance.onend = () => {
+        setIsSpeakingAI(false);
+        setAiResponseText('');
+      };
+
+      utterance.onerror = (event) => {
+        console.error('Web Speech API error:', event.error);
+        toast.error("Browser speech synthesis failed.");
+        setIsSpeakingAI(false);
+        setAiResponseText('');
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      toast.error("Browser does not support Web Speech API for text-to-speech.");
+      setIsSpeakingAI(false);
+      setAiResponseText('');
     }
   }, []);
 
@@ -164,22 +201,35 @@ const Home: React.FC = () => {
 
       const aiText = geminiResponse.data.text;
 
-      // 2. Call Eleven Labs TTS Edge Function directly
-      const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
-        body: { text: aiText },
-      });
+      let audioUrl: string | null = null;
+      let ttsUsedFallback = false;
 
-      if (elevenLabsResponse.error) {
-        throw new Error(elevenLabsResponse.error.message);
+      try {
+        // 2. Try calling Eleven Labs TTS Edge Function
+        const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
+          body: { text: aiText },
+        });
+
+        if (elevenLabsResponse.error || !elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
+          console.warn('ElevenLabs TTS failed, attempting fallback to Web Speech API:', elevenLabsResponse.error?.message || 'Invalid data');
+          speakWithWebSpeechAPI(aiText);
+          ttsUsedFallback = true;
+          toast.info("ElevenLabs failed, using browser's voice.");
+        } else {
+          audioUrl = elevenLabsResponse.data.audioUrl;
+          playAudioAndThenListen(audioUrl, aiText);
+        }
+      } catch (elevenLabsError: any) {
+        console.warn('ElevenLabs TTS failed completely, attempting fallback to Web Speech API:', elevenLabsError.message);
+        speakWithWebSpeechAPI(aiText);
+        ttsUsedFallback = true;
+        toast.info("ElevenLabs failed, using browser's voice.");
       }
 
-      if (!elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
-        const errorMessage = elevenLabsResponse.data?.error || JSON.stringify(elevenLabsResponse.data);
-        throw new Error(`Invalid response from Eleven Labs TTS function: ${errorMessage}`);
+      // If neither ElevenLabs nor Web Speech API could be used, then it's an overall failure for TTS
+      if (!audioUrl && !ttsUsedFallback) {
+        throw new Error("Failed to generate speech from both ElevenLabs and Web Speech API.");
       }
-
-      const audioUrl = elevenLabsResponse.data.audioUrl;
-      playAudioAndThenListen(audioUrl, aiText);
 
       // 3. Store interaction in Supabase
       if (session?.user?.id) {
@@ -187,7 +237,7 @@ const Home: React.FC = () => {
           user_id: session.user.id,
           input_text: text,
           response_text: aiText,
-          audio_url: audioUrl,
+          audio_url: audioUrl, // Store audioUrl if available, else null
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
@@ -202,7 +252,6 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
-      // No automatic restart here, return to idle
     } finally {
       setIsThinkingAI(false);
     }
