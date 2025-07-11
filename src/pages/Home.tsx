@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageSquare, Bot, User } from 'lucide-react';
+import { MessageSquare, User } from 'lucide-react'; // Removed Bot icon as AI text messages are removed
 
 interface Message {
   id: string;
@@ -74,13 +74,7 @@ const Home: React.FC = () => {
       }
 
       const aiText = geminiResponse.data.text;
-      const aiMessage: Message = {
-        id: Date.now().toString() + '-ai',
-        type: 'ai',
-        text: aiText,
-        timestamp: new Date().toLocaleTimeString(),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+      // AI text message is no longer added to the 'messages' state to prevent display
 
       // 2. Call Eleven Labs TTS Edge Function
       const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
@@ -100,7 +94,7 @@ const Home: React.FC = () => {
         const { error: dbError } = await supabase.from('interactions').insert({
           user_id: session.user.id,
           input_text: text,
-          response_text: aiText,
+          response_text: aiText, // Still store the AI's text response in the database
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
@@ -148,46 +142,27 @@ const Home: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex items-start gap-3 ${
-                        msg.type === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      {msg.type === 'ai' && (
-                        <Avatar>
-                          <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
-                        </Avatar>
-                      )}
+                    // Only display user messages
+                    msg.type === 'user' && (
                       <div
-                        className={`p-3 rounded-lg max-w-[70%] ${
-                          msg.type === 'user'
-                            ? 'bg-blue-500 text-white rounded-br-none'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-none'
-                        }`}
+                        key={msg.id}
+                        className="flex items-start gap-3 justify-end"
                       >
-                        <p className="text-sm">{msg.text}</p>
-                        <span className="block text-xs mt-1 opacity-75">
-                          {msg.timestamp}
-                        </span>
-                      </div>
-                      {msg.type === 'user' && (
+                        <div
+                          className="p-3 rounded-lg max-w-[70%] bg-blue-500 text-white rounded-br-none"
+                        >
+                          <p className="text-sm">{msg.text}</p>
+                          <span className="block text-xs mt-1 opacity-75">
+                            {msg.timestamp}
+                          </span>
+                        </div>
                         <Avatar>
                           <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
                         </Avatar>
-                      )}
-                    </div>
-                  ))}
-                  {isLoadingAI && (
-                    <div className="flex items-start gap-3 justify-start">
-                      <Avatar>
-                        <AvatarFallback><Bot className="h-5 w-5" /></AvatarFallback>
-                      </Avatar>
-                      <div className="p-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-none">
-                        <p className="text-sm italic">AI is typing...</p>
                       </div>
-                    </div>
-                  )}
+                    )
+                  ))}
+                  {/* Removed isLoadingAI message as per request */}
                 </div>
               )}
             </ScrollArea>
