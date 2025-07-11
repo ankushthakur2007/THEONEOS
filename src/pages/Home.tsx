@@ -2,36 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageSquare, Mic, StopCircle, User } from 'lucide-react';
-import AudioVisualizer from '@/components/AudioVisualizer'; // New import
-
-interface Message {
-  id: string;
-  type: 'user' | 'ai';
-  text: string;
-  timestamp: string;
-}
+import { Mic, StopCircle } from 'lucide-react';
+import AudioVisualizer from '@/components/AudioVisualizer';
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
-  const [messages, setMessages] = useState<Message[]>([]);
   const [isRecordingUser, setIsRecordingUser] = useState(false);
   const [isSpeakingAI, setIsSpeakingAI] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  // Scroll to bottom of messages
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
-  }, [messages, currentInterimText]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -99,14 +80,6 @@ const Home: React.FC = () => {
     };
   }, []);
 
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('Error logging out:', error.message);
-      toast.error('Failed to log out.');
-    }
-  };
-
   const handleStartRecording = () => {
     if (recognitionRef.current && !isRecordingUser && !isSpeakingAI) {
       try {
@@ -140,13 +113,9 @@ const Home: React.FC = () => {
   };
 
   const handleTranscriptionComplete = async (text: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString() + '-user',
-      type: 'user',
-      text: text,
-      timestamp: new Date().toLocaleTimeString(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    // No longer adding user message to a visible list on this screen
+    // setMessages((prev) => [...prev, userMessage]); // Removed
+
     const loadingToastId = toast.loading("Thinking...");
 
     try {
@@ -178,14 +147,8 @@ const Home: React.FC = () => {
       const audioUrl = elevenLabsResponse.data.audioUrl;
       playAudio(audioUrl); // Start playing audio immediately
 
-      // Add AI response to messages after audio starts
-      const aiMessage: Message = {
-        id: Date.now().toString() + '-ai',
-        type: 'ai',
-        text: aiText,
-        timestamp: new Date().toLocaleTimeString(),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+      // No longer adding AI message to a visible list on this screen
+      // setMessages((prev) => [...prev, aiMessage]); // Removed
 
       // 3. Store interaction in Supabase
       if (session?.user?.id) {
@@ -213,98 +176,39 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-      <div className="text-center space-y-6 w-full max-w-3xl">
-        <h1 className="text-5xl font-extrabold text-gray-900 dark:text-white">
-          Welcome to <span className="text-blue-600">THEONEOS</span>
-        </h1>
-        <p className="text-xl text-gray-700 dark:text-gray-300 max-w-2xl mx-auto">
-          Your cross-platform smart assistant. Interact with AI, control your devices, and manage your smart home.
-        </p>
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
+      <div className="flex-grow flex items-center justify-center">
+        {/* Placeholder for potential AI avatar or central element */}
+        {/* You can add an image or a larger visualizer here if desired */}
+      </div>
 
-        <Card className="w-full max-w-3xl mx-auto mt-8">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-2xl font-bold">
-              <MessageSquare className="inline-block mr-2" /> Conversation
-            </CardTitle>
-            <Button variant="outline" onClick={handleLogout} className="text-lg">
-              Logout
-            </Button>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <ScrollArea className="h-[400px] w-full rounded-md border p-4 bg-background">
-              <div ref={scrollAreaRef} className="h-full overflow-y-auto pr-2"> {/* Inner div for scrolling */}
-                {messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                    Start by speaking to the AI!
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex items-start gap-3 ${
-                          msg.type === 'user' ? 'justify-end' : 'justify-start'
-                        }`}
-                      >
-                        {msg.type === 'ai' && (
-                          <Avatar>
-                            <AvatarFallback>AI</AvatarFallback>
-                          </Avatar>
-                        )}
-                        <div
-                          className={`p-3 rounded-lg max-w-[70%] ${
-                            msg.type === 'user'
-                              ? 'bg-blue-500 text-white rounded-br-none'
-                              : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-bl-none'
-                          }`}
-                        >
-                          <p className="text-sm">{msg.text}</p>
-                          <span className="block text-xs mt-1 opacity-75">
-                            {msg.timestamp}
-                          </span>
-                        </div>
-                        {msg.type === 'user' && (
-                          <Avatar>
-                            <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
-                          </Avatar>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-            <div className="mt-4 flex flex-col items-center justify-center space-y-4">
-              {currentInterimText && (
-                <p className="text-lg text-gray-800 dark:text-gray-200 text-center px-4 min-h-[2rem]">
-                  {currentInterimText}
-                </p>
-              )}
-              {(isRecordingUser || isSpeakingAI) && (
-                <AudioVisualizer isAnimating={true} className="h-10 w-40" />
-              )}
-              <Button
-                variant="default"
-                size="icon"
-                className={`w-20 h-20 rounded-full transition-all duration-300 ${
-                  isRecordingUser ? 'bg-red-500 hover:bg-red-600 animate-pulse' : ''
-                } ${isSpeakingAI ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={handleStartRecording}
-                disabled={isSpeakingAI}
-              >
-                {isRecordingUser ? (
-                  <StopCircle className="h-10 w-10" />
-                ) : (
-                  <Mic className="h-10 w-10" />
-                )}
-              </Button>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : "Tap to speak")}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="relative flex flex-col items-center justify-center mb-8">
+        {currentInterimText && (
+          <p className="text-xl text-gray-300 text-center px-4 mb-4 max-w-2xl">
+            {currentInterimText}
+          </p>
+        )}
+        {(isRecordingUser || isSpeakingAI) && (
+          <AudioVisualizer isAnimating={true} className="absolute inset-0 m-auto h-40 w-40" />
+        )}
+        <Button
+          variant="default"
+          size="icon"
+          className={`w-24 h-24 rounded-full transition-all duration-300 relative z-10
+            ${isRecordingUser ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'}
+            ${isSpeakingAI ? 'opacity-50 cursor-not-allowed' : ''}`}
+          onClick={handleStartRecording}
+          disabled={isSpeakingAI}
+        >
+          {isRecordingUser ? (
+            <StopCircle className="h-12 w-12" />
+          ) : (
+            <Mic className="h-12 w-12" />
+          )}
+        </Button>
+        <p className="text-sm text-gray-400 mt-4">
+          {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : "Tap to speak")}
+        </p>
       </div>
 
       <audio ref={audioRef} className="hidden" />
