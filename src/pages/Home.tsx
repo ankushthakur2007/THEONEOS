@@ -1,12 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
-import VoiceInputModal from '@/components/VoiceInputModal';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageSquare, User } from 'lucide-react';
+import { MessageSquare, Mic, StopCircle, User } from 'lucide-react';
+import AudioVisualizer from '@/components/AudioVisualizer'; // New import
 
 interface Message {
   id: string;
@@ -17,10 +17,87 @@ interface Message {
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
-  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [isRecordingUser, setIsRecordingUser] = useState(false);
+  const [isSpeakingAI, setIsSpeakingAI] = useState(false);
+  const [currentInterimText, setCurrentInterimText] = useState('');
+  const finalTranscriptionRef = useRef<string>('');
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom of messages
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    }
+  }, [messages, currentInterimText]);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    const recognition = recognitionRef.current;
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecordingUser(true);
+      setCurrentInterimText('');
+      finalTranscriptionRef.current = '';
+      toast.info("Listening...");
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimTranscript = '';
+      let currentFinalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          currentFinalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      finalTranscriptionRef.current += currentFinalTranscript;
+      setCurrentInterimText(finalTranscriptionRef.current + interimTranscript);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions.`);
+      setIsRecordingUser(false);
+      finalTranscriptionRef.current = '';
+      setCurrentInterimText('');
+    };
+
+    recognition.onend = () => {
+      setIsRecordingUser(false);
+      const finalTranscribedText = finalTranscriptionRef.current.trim();
+      if (finalTranscribedText) {
+        handleTranscriptionComplete(finalTranscribedText);
+      } else {
+        toast.info("No speech detected.");
+      }
+      finalTranscriptionRef.current = '';
+      setCurrentInterimText('');
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
+  }, []);
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -30,27 +107,39 @@ const Home: React.FC = () => {
     }
   };
 
-  const handleOpenVoiceInput = () => {
-    setIsVoiceModalOpen(true);
+  const handleStartRecording = () => {
+    if (recognitionRef.current && !isRecordingUser && !isSpeakingAI) {
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        toast.error("Failed to start voice input. Ensure microphone is connected and permissions are granted.");
+        setIsRecordingUser(false);
+      }
+    } else if (isRecordingUser) {
+      recognitionRef.current?.stop();
+    }
   };
 
   const playAudio = (audioUrl: string) => {
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
+      setIsSpeakingAI(true);
       audioRef.current.play().catch(e => {
         console.error("Error playing audio:", e);
         toast.error(`Audio playback failed: ${e.message}. Check console for details.`);
+        setIsSpeakingAI(false);
       });
+      audioRef.current.onended = () => {
+        setIsSpeakingAI(false);
+      };
+      audioRef.current.onerror = () => {
+        setIsSpeakingAI(false);
+      };
     }
   };
 
   const handleTranscriptionComplete = async (text: string) => {
-    setIsVoiceModalOpen(false);
-    if (!text.trim()) {
-      toast.info("No speech detected or transcription was empty.");
-      return;
-    }
-
     const userMessage: Message = {
       id: Date.now().toString() + '-user',
       type: 'user',
@@ -58,7 +147,6 @@ const Home: React.FC = () => {
       timestamp: new Date().toLocaleTimeString(),
     };
     setMessages((prev) => [...prev, userMessage]);
-    setIsLoadingAI(true);
     const loadingToastId = toast.loading("Thinking...");
 
     try {
@@ -82,16 +170,15 @@ const Home: React.FC = () => {
         throw new Error(elevenLabsResponse.error.message);
       }
 
-      // Expecting an object with audioUrl from the edge function
       if (!elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
         const errorMessage = elevenLabsResponse.data?.error || JSON.stringify(elevenLabsResponse.data);
         throw new Error(`Invalid response from Eleven Labs TTS function: ${errorMessage}`);
       }
 
       const audioUrl = elevenLabsResponse.data.audioUrl;
-      playAudio(audioUrl);
+      playAudio(audioUrl); // Start playing audio immediately
 
-      // Add AI response to messages
+      // Add AI response to messages after audio starts
       const aiMessage: Message = {
         id: Date.now().toString() + '-ai',
         type: 'ai',
@@ -106,7 +193,7 @@ const Home: React.FC = () => {
           user_id: session.user.id,
           input_text: text,
           response_text: aiText,
-          audio_url: audioUrl, // Store the audio URL
+          audio_url: audioUrl,
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
@@ -115,14 +202,13 @@ const Home: React.FC = () => {
       }
 
       toast.dismiss(loadingToastId);
-      toast.success("AI response received and audio playing!");
+      toast.success("AI response received!");
 
     } catch (error: any) {
       console.error('Error interacting with AI or TTS:', error);
       toast.dismiss(loadingToastId);
       toast.error(`Failed to get AI response: ${error.message}`);
-    } finally {
-      setIsLoadingAI(false);
+      setIsSpeakingAI(false); // Ensure AI speaking state is reset on error
     }
   };
 
@@ -147,62 +233,80 @@ const Home: React.FC = () => {
           </CardHeader>
           <CardContent className="pt-4">
             <ScrollArea className="h-[400px] w-full rounded-md border p-4 bg-background">
-              {messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                  Start by speaking to the AI!
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex items-start gap-3 ${
-                        msg.type === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      {msg.type === 'ai' && (
-                        <Avatar>
-                          <AvatarFallback>AI</AvatarFallback>
-                          {/* You can add an AvatarImage src here if you have an AI avatar */}
-                          {/* <AvatarImage src="/path/to/ai-avatar.png" /> */}
-                        </Avatar>
-                      )}
+              <div ref={scrollAreaRef} className="h-full overflow-y-auto pr-2"> {/* Inner div for scrolling */}
+                {messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                    Start by speaking to the AI!
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {messages.map((msg) => (
                       <div
-                        className={`p-3 rounded-lg max-w-[70%] ${
-                          msg.type === 'user'
-                            ? 'bg-blue-500 text-white rounded-br-none'
-                            : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-bl-none'
+                        key={msg.id}
+                        className={`flex items-start gap-3 ${
+                          msg.type === 'user' ? 'justify-end' : 'justify-start'
                         }`}
                       >
-                        <p className="text-sm">{msg.text}</p>
-                        <span className="block text-xs mt-1 opacity-75">
-                          {msg.timestamp}
-                        </span>
+                        {msg.type === 'ai' && (
+                          <Avatar>
+                            <AvatarFallback>AI</AvatarFallback>
+                          </Avatar>
+                        )}
+                        <div
+                          className={`p-3 rounded-lg max-w-[70%] ${
+                            msg.type === 'user'
+                              ? 'bg-blue-500 text-white rounded-br-none'
+                              : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-bl-none'
+                          }`}
+                        >
+                          <p className="text-sm">{msg.text}</p>
+                          <span className="block text-xs mt-1 opacity-75">
+                            {msg.timestamp}
+                          </span>
+                        </div>
+                        {msg.type === 'user' && (
+                          <Avatar>
+                            <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
+                          </Avatar>
+                        )}
                       </div>
-                      {msg.type === 'user' && (
-                        <Avatar>
-                          <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </ScrollArea>
-            <div className="mt-4 flex justify-center">
-              <Button onClick={handleOpenVoiceInput} className="px-8 py-4 text-lg" disabled={isLoadingAI}>
-                {isLoadingAI ? "AI is Responding..." : "Start Voice Input"}
+            <div className="mt-4 flex flex-col items-center justify-center space-y-4">
+              {currentInterimText && (
+                <p className="text-lg text-gray-800 dark:text-gray-200 text-center px-4 min-h-[2rem]">
+                  {currentInterimText}
+                </p>
+              )}
+              {(isRecordingUser || isSpeakingAI) && (
+                <AudioVisualizer isAnimating={true} className="h-10 w-40" />
+              )}
+              <Button
+                variant="default"
+                size="icon"
+                className={`w-20 h-20 rounded-full transition-all duration-300 ${
+                  isRecordingUser ? 'bg-red-500 hover:bg-red-600 animate-pulse' : ''
+                } ${isSpeakingAI ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={handleStartRecording}
+                disabled={isSpeakingAI}
+              >
+                {isRecordingUser ? (
+                  <StopCircle className="h-10 w-10" />
+                ) : (
+                  <Mic className="h-10 w-10" />
+                )}
               </Button>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : "Tap to speak")}
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <VoiceInputModal
-        isOpen={isVoiceModalOpen}
-        onClose={() => setIsVoiceModalOpen(false)}
-        onTranscriptionComplete={handleTranscriptionComplete}
-      />
       <audio ref={audioRef} className="hidden" />
     </div>
   );
