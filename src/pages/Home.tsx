@@ -43,35 +43,31 @@ const Home: React.FC = () => {
         // Audio started playing successfully
       }).catch(e => {
         console.error("Error attempting to play audio:", e);
-        toast.error(`Audio playback failed: ${e.message}. Tap the sparkle button to speak.`);
+        toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Restart listening even if audio playback fails
       });
 
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Automatically restart listening after AI finishes speaking
+        // Recognition should already be running if continuous is true.
+        // No need to call startRecognition() here.
       };
 
       audioRef.current.onerror = () => {
         console.error("Audio playback error event.");
-        toast.error("Audio playback error. Tap the sparkle button to speak.");
+        toast.error("Audio playback error.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Restart listening on audio error
       };
     }
-  }, [startRecognition]);
+  }, []);
 
   // Function to speak using Web Speech API (fallback)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      // Optional: Set voice, pitch, rate, volume if needed
-      // const voices = window.speechSynthesis.getVoices();
-      // utterance.voice = voices.find(voice => voice.lang === 'en-US') || voices[0]; // Try to find an English voice
       utterance.pitch = 1;
       utterance.rate = 1;
       utterance.volume = 1;
@@ -85,7 +81,8 @@ const Home: React.FC = () => {
       utterance.onend = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Automatically restart listening after AI finishes speaking
+        // Recognition should already be running if continuous is true.
+        // No need to call startRecognition() here.
       };
 
       utterance.onerror = (event) => {
@@ -93,7 +90,6 @@ const Home: React.FC = () => {
         toast.error("Browser speech synthesis failed.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        startRecognition(); // Restart listening on Web Speech API error
       };
 
       window.speechSynthesis.speak(utterance);
@@ -101,9 +97,8 @@ const Home: React.FC = () => {
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
       setAiResponseText('');
-      startRecognition(); // Restart listening if Web Speech API is not supported
     }
-  }, [startRecognition]);
+  }, []);
 
   // Function to handle transcription completion and AI interaction
   const handleTranscriptionComplete = useCallback(async (text: string) => {
@@ -174,11 +169,10 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
-      startRecognition(); // Restart listening on AI interaction error
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText, startRecognition]); // Added startRecognition to dependencies
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -191,7 +185,7 @@ const Home: React.FC = () => {
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
 
-    recognition.continuous = false; // For single utterance, then restart
+    recognition.continuous = true; // IMPORTANT CHANGE: Set to true for continuous listening
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -217,30 +211,50 @@ const Home: React.FC = () => {
       }
       finalTranscriptionRef.current += currentFinalTranscript;
       setCurrentInterimText(finalTranscriptionRef.current + interimTranscript);
+
+      // If a final result is received, process it
+      if (currentFinalTranscript.trim()) {
+        handleTranscriptionComplete(currentFinalTranscript.trim());
+        finalTranscriptionRef.current = ''; // Clear for next segment
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
       toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Attempting to restart.`);
-      setIsRecordingUser(false);
+      setIsRecordingUser(false); // Recognition session has ended due to error
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      startRecognition(); // Automatically restart listening on error
+      // Attempt to restart recognition after an error
+      // A small delay might be beneficial here to avoid rapid restarts if the error is persistent.
+      setTimeout(() => {
+        if (recognitionRef.current) { // Check if component is still mounted
+          startRecognition();
+        }
+      }, 1000); // Wait 1 second before attempting restart
     };
 
     recognition.onend = () => {
-      setIsRecordingUser(false);
-      const finalTranscribedText = finalTranscriptionRef.current.trim();
-      if (finalTranscribedText) {
-        handleTranscriptionComplete(finalTranscribedText);
-      } else {
-        toast.info("No speech detected. Restarting listening.");
-        setCurrentInterimText('');
-        startRecognition(); // Automatically restart listening even if no speech was detected
-      }
+      console.log("Speech recognition session ended.");
+      setIsRecordingUser(false); // Recognition session has ended
       finalTranscriptionRef.current = '';
+      setCurrentInterimText('');
+      setAiResponseText('');
+      // If the session ended unexpectedly (not by user stopping it), restart it.
+      // We only restart if AI is not currently speaking or thinking.
+      if (!isSpeakingAI && !isThinkingAI) {
+        toast.info("Speech recognition session ended. Restarting listening.");
+        setTimeout(() => {
+          if (recognitionRef.current) { // Check if component is still mounted
+            startRecognition();
+          }
+        }, 500); // Small delay before restarting
+      }
     };
+
+    // Initial start when component mounts
+    startRecognition();
 
     return () => {
       if (recognitionRef.current) {
@@ -248,7 +262,7 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, [handleTranscriptionComplete, startRecognition]); // Added startRecognition to dependencies
+  }, [handleTranscriptionComplete, startRecognition, isSpeakingAI, isThinkingAI]);
 
   const handleToggleRecording = () => {
     if (isSpeakingAI || isThinkingAI) {
@@ -256,8 +270,12 @@ const Home: React.FC = () => {
     }
 
     if (isRecordingUser) {
+      // If currently recording, stop it. This is the manual stop.
       recognitionRef.current?.stop();
+      setIsRecordingUser(false); // Manually set state to false
+      toast.info("Voice input stopped.");
     } else {
+      // If not recording, start it.
       startRecognition();
     }
   };
