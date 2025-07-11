@@ -82,7 +82,7 @@ const Home: React.FC = () => {
         setIsVoiceLoopActive(false); // Stop loop on recognition start error
       }
     }, 500); // Increased delay to 500ms
-  }, [cancelSpeech]); // Removed isRecordingUser from dependencies to stabilize this callback
+  }, [cancelSpeech]);
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
@@ -361,42 +361,48 @@ const Home: React.FC = () => {
 
   // Initialize Speech Recognition (this useEffect should only run once for setup)
   useEffect(() => {
-    // Check for browser support
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
-      return;
-    }
+    const initializeSpeechRecognition = () => {
+      // Check for browser support
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
+        return;
+      }
 
-    // Get the SpeechRecognition constructor
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      // Get the SpeechRecognition constructor
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    // If for some reason it's still not a function (e.g., null, undefined, or not a constructor)
-    if (typeof SpeechRecognition !== 'function') {
-      console.error("SpeechRecognition API found but is not a valid constructor.");
-      toast.error("Voice input API is not fully functional in your browser.");
-      return;
-    }
+      // If for some reason it's still not a function (e.g., null, undefined, or not a constructor)
+      if (typeof SpeechRecognition !== 'function') {
+        console.error("SpeechRecognition API found but is not a valid constructor.");
+        toast.error("Voice input API is not fully functional in your browser.");
+        return;
+      }
 
-    recognitionRef.current = new SpeechRecognition();
-    const recognition = recognitionRef.current;
+      recognitionRef.current = new SpeechRecognition();
+      const recognition = recognitionRef.current;
 
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-    recognition.onstart = () => {
-      console.log("SpeechRecognition: Started.");
-      setIsRecordingUser(true);
-      setCurrentInterimText('');
-      setAiResponseText('');
-      finalTranscriptionRef.current = '';
+      recognition.onstart = () => {
+        console.log("SpeechRecognition: Started.");
+        setIsRecordingUser(true);
+        setCurrentInterimText('');
+        setAiResponseText('');
+        finalTranscriptionRef.current = '';
+      };
+
+      recognition.onresult = handleRecognitionResult;
+      recognition.onerror = handleRecognitionError;
+      recognition.onend = handleRecognitionEnd;
     };
 
-    recognition.onresult = handleRecognitionResult;
-    recognition.onerror = handleRecognitionError;
-    recognition.onend = handleRecognitionEnd;
+    // Defer execution to ensure window is fully ready
+    const timeoutId = setTimeout(initializeSpeechRecognition, 0);
 
     return () => {
+      clearTimeout(timeoutId); // Clear timeout if component unmounts before it fires
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
