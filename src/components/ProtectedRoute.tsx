@@ -22,7 +22,7 @@ const ProtectedRoute: React.FC = () => {
     });
 
     return () => {
-      authListener.unsubscribe();
+      authListener.subscription.unsubscribe(); // Corrected line
     };
   }, []);
 

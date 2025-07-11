@@ -29,7 +29,7 @@ const Index: React.FC = () => {
     });
 
     return () => {
-      authListener.unsubscribe();
+      authListener.subscription.unsubscribe(); // Corrected line
     };
   }, [navigate]);
 
