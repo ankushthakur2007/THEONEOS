@@ -2,14 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
-import { Star, StopCircle } from 'lucide-react'; // Changed Mic to Star
-import AudioVisualizer from '@/components/AudioVisualizer';
+import { Star, StopCircle } from 'lucide-react';
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const [isRecordingUser, setIsRecordingUser] = useState(false);
   const [isSpeakingAI, setIsSpeakingAI] = useState(false);
-  const [isThinkingAI, setIsThinkingAI] = useState(false); // New state for AI thinking
+  const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
   const finalTranscriptionRef = useRef<string>('');
@@ -144,10 +143,10 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, []); // No dependencies, runs once on mount
+  }, []);
 
   const handleToggleRecording = () => {
-    if (isSpeakingAI || isThinkingAI) { // Disable button if AI is speaking or thinking
+    if (isSpeakingAI || isThinkingAI) {
       return;
     }
 
@@ -159,9 +158,9 @@ const Home: React.FC = () => {
   };
 
   const handleTranscriptionComplete = async (text: string) => {
-    setIsThinkingAI(true); // Set thinking state
-    setCurrentInterimText(''); // Clear current text
-    setAiResponseText(''); // Clear AI response text
+    setIsThinkingAI(true);
+    setCurrentInterimText('');
+    setAiResponseText('');
 
     try {
       // 1. Call Gemini AI Edge Function
@@ -190,7 +189,7 @@ const Home: React.FC = () => {
       }
 
       const audioUrl = elevenLabsResponse.data.audioUrl;
-      playAudioAndThenListen(audioUrl, aiText); // Start playing audio and display AI text
+      playAudioAndThenListen(audioUrl, aiText);
 
       // 3. Store interaction in Supabase
       if (session?.user?.id) {
@@ -211,11 +210,11 @@ const Home: React.FC = () => {
     } catch (error: any) {
       console.error('Error interacting with AI or TTS:', error);
       toast.error(`Failed to get AI response: ${error.message}`);
-      setIsSpeakingAI(false); // Ensure AI speaking state is reset on error
-      setAiResponseText(''); // Clear AI text on error
-      startRecognition(); // Attempt to start recognition even if AI interaction fails
+      setIsSpeakingAI(false);
+      setAiResponseText('');
+      startRecognition();
     } finally {
-      setIsThinkingAI(false); // Always set thinking state to false after process
+      setIsThinkingAI(false);
     }
   };
 
@@ -229,11 +228,8 @@ const Home: React.FC = () => {
           </p>
         )}
 
-        {/* Microphone button and visualizer */}
+        {/* Microphone button */}
         <div className="relative flex flex-col items-center justify-center">
-          {(isRecordingUser || isSpeakingAI || isThinkingAI) && (
-            <AudioVisualizer isAnimating={true} className="absolute inset-0 m-auto h-40 w-40" />
-          )}
           {/* Only show the button when neither recording, speaking, nor thinking */}
           {!isRecordingUser && !isSpeakingAI && !isThinkingAI && (
             <Button
