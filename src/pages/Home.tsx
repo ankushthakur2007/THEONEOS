@@ -21,6 +21,7 @@ const Home: React.FC = () => {
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]); // State for conversation history
+  const [isRecognitionAPIAvailable, setIsRecognitionAPIAvailable] = useState(false); // New state for API availability
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -378,27 +379,35 @@ const Home: React.FC = () => {
       if (!SpeechRecognitionConstructor) {
         console.error("Speech recognition API not found or not a valid constructor.");
         toast.error("Speech recognition is not supported in your browser. Please try Chrome or Edge.");
+        setIsRecognitionAPIAvailable(false); // Explicitly set to false
         return;
       }
 
-      recognitionRef.current = new SpeechRecognitionConstructor();
-      const recognition = recognitionRef.current;
+      try {
+        recognitionRef.current = new SpeechRecognitionConstructor();
+        const recognition = recognitionRef.current;
 
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
 
-      recognition.onstart = () => {
-        console.log("SpeechRecognition: Started.");
-        setIsRecordingUser(true);
-        setCurrentInterimText('');
-        setAiResponseText('');
-        finalTranscriptionRef.current = '';
-      };
+        recognition.onstart = () => {
+          console.log("SpeechRecognition: Started.");
+          setIsRecordingUser(true);
+          setCurrentInterimText('');
+          setAiResponseText('');
+          finalTranscriptionRef.current = '';
+        };
 
-      recognition.onresult = handleRecognitionResult;
-      recognition.onerror = handleRecognitionError;
-      recognition.onend = handleRecognitionEnd;
+        recognition.onresult = handleRecognitionResult;
+        recognition.onerror = handleRecognitionError;
+        recognition.onend = handleRecognitionEnd;
+        setIsRecognitionAPIAvailable(true); // Set to true only on successful initialization
+      } catch (e) {
+        console.error("Error creating SpeechRecognition instance:", e);
+        toast.error("Failed to initialize voice input. Please try a different browser.");
+        setIsRecognitionAPIAvailable(false);
+      }
     };
 
     // Defer execution to ensure window is fully ready
@@ -429,6 +438,10 @@ const Home: React.FC = () => {
 
   // Function to start the voice loop
   const handleStartVoiceLoop = () => {
+    if (!isRecognitionAPIAvailable) {
+      toast.error("Voice input is not available in your browser or microphone access is denied.");
+      return;
+    }
     if (!isVoiceLoopActive) {
       setIsVoiceLoopActive(true); // This will trigger the useEffect to start recognition
     }
@@ -463,6 +476,7 @@ const Home: React.FC = () => {
             size="icon"
             className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
             onClick={handleStartVoiceLoop}
+            disabled={!isRecognitionAPIAvailable} // Disable button if API is not available
           >
             <Sparkles className="h-36 w-36" />
           </Button>
