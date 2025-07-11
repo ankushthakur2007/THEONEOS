@@ -31,41 +31,39 @@ const Home: React.FC = () => {
     }
   }, [isRecordingUser, isSpeakingAI, isThinkingAI]);
 
-  // Function to play audio and then automatically start recognition
+  // Function to play audio and then transition to idle state
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
       setIsSpeakingAI(true);
       setAiResponseText(aiText);
-      setCurrentInterimText('');
+      setCurrentInterimText(''); // Clear interim text when AI starts speaking
 
       audioRef.current.play().then(() => {
         // Audio started playing successfully
       }).catch(e => {
         console.error("Error attempting to play audio:", e);
-        toast.error(`Audio playback failed: ${e.message}.`);
+        toast.error(`Audio playback failed: ${e.message}. Tap the sparkle button to speak.`);
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // Try to start recognition even if audio fails, with a slight delay
-        setTimeout(() => startRecognition(), 100);
+        // No automatic restart here, return to idle
       });
 
       audioRef.current.onended = () => {
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // Automatically start listening for user input after AI finishes speaking, with a slight delay
-        setTimeout(() => startRecognition(), 100);
+        // No automatic restart here, return to idle
       };
 
       audioRef.current.onerror = () => {
         console.error("Audio playback error event.");
+        toast.error("Audio playback error. Tap the sparkle button to speak.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        // Try to start recognition if audio errors, with a slight delay
-        setTimeout(() => startRecognition(), 100);
+        // No automatic restart here, return to idle
       };
     }
-  }, [startRecognition]);
+  }, []);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -108,13 +106,12 @@ const Home: React.FC = () => {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions.`);
+      toast.error(`Speech recognition error: ${event.error}. Please check microphone permissions. Tap the sparkle button to try again.`);
       setIsRecordingUser(false);
       finalTranscriptionRef.current = '';
       setCurrentInterimText('');
       setAiResponseText('');
-      // Attempt to restart recognition after an error with a slight delay
-      setTimeout(() => startRecognition(), 100);
+      // No automatic restart here, return to idle
     };
 
     recognition.onend = () => {
@@ -123,10 +120,9 @@ const Home: React.FC = () => {
       if (finalTranscribedText) {
         handleTranscriptionComplete(finalTranscribedText);
       } else {
-        toast.info("No speech detected. Ready for your input.");
+        toast.info("No speech detected. Tap the sparkle button to speak.");
         setCurrentInterimText('');
-        // If no speech detected, automatically try to start listening again with a slight delay
-        setTimeout(() => startRecognition(), 100);
+        // No automatic restart here, return to idle
       }
       finalTranscriptionRef.current = '';
     };
@@ -137,7 +133,7 @@ const Home: React.FC = () => {
         recognitionRef.current = null;
       }
     };
-  }, [startRecognition]); // Added startRecognition to dependencies
+  }, []); // No dependencies needed here as startRecognition is called explicitly
 
   const handleToggleRecording = () => {
     if (isSpeakingAI || isThinkingAI) {
@@ -203,11 +199,10 @@ const Home: React.FC = () => {
 
     } catch (error: any) {
       console.error('Error interacting with AI or TTS:', error);
-      toast.error(`Failed to get AI response: ${error.message}`);
+      toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
-      // Attempt to restart recognition after an error, with a slight delay
-      setTimeout(() => startRecognition(), 100);
+      // No automatic restart here, return to idle
     } finally {
       setIsThinkingAI(false);
     }
@@ -216,10 +211,10 @@ const Home: React.FC = () => {
   // Determine the main status text to display
   const displayMessage = isRecordingUser
     ? currentInterimText || "Listening..." // Show interim text if available, else "Listening..."
-    : isSpeakingAI
-    ? aiResponseText || "AI is speaking..." // Show AI response text if available, else "AI is speaking..."
     : isThinkingAI
     ? "Thinking..."
+    : isSpeakingAI
+    ? aiResponseText || "AI is speaking..." // Show AI response text if available, else "AI is speaking..."
     : "Tap to speak"; // Default message when idle
 
   return (
