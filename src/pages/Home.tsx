@@ -31,6 +31,7 @@ const Home: React.FC = () => {
     }
     if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
+      console.log("SpeechSynthesis: Canceled existing speech.");
     }
   }, []);
 
@@ -48,12 +49,14 @@ const Home: React.FC = () => {
           setIsRecordingUser(false); // Ensure recording state is false on error
         }
       }
+    } else {
+      console.log("startRecognition blocked:", { isRecordingUser, isSpeakingAI, isThinkingAI });
     }
   }, [isRecordingUser, isSpeakingAI, isThinkingAI, cancelSpeech]);
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
-    cancelSpeech(); // Cancel any ongoing speech before playing new audio
+    // cancelSpeech() is handled by startRecognition or handleToggleRecording
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
       setIsSpeakingAI(true);
@@ -61,9 +64,9 @@ const Home: React.FC = () => {
       setCurrentInterimText(''); // Clear interim text when AI starts speaking
 
       audioRef.current.play().then(() => {
-        // Audio started playing successfully
+        console.log("ElevenLabs Audio: Playback started.");
       }).catch(e => {
-        console.error("Error attempting to play audio:", e);
+        console.error("Error attempting to play ElevenLabs audio:", e);
         toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text on audio playback error
@@ -71,24 +74,25 @@ const Home: React.FC = () => {
       });
 
       audioRef.current.onended = () => {
+        console.log("ElevenLabs Audio: Playback ended.");
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text after speaking
         startRecognition(); // Automatically restart listening after AI finishes speaking
       };
 
       audioRef.current.onerror = () => {
-        console.error("Audio playback error event.");
+        console.error("ElevenLabs Audio: Playback error event.");
         toast.error("Audio playback error.");
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text on audio error
         startRecognition(); // Restart listening on audio error
       };
     }
-  }, [startRecognition, cancelSpeech]);
+  }, [startRecognition]);
 
   // Function to speak using Web Speech API (fallback)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
-    cancelSpeech(); // Cancel any ongoing speech before speaking new text
+    // cancelSpeech() is handled by startRecognition or handleToggleRecording
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.pitch = 1;
@@ -96,12 +100,14 @@ const Home: React.FC = () => {
       utterance.volume = 1;
 
       utterance.onstart = () => {
+        console.log("Web Speech API: Speech started.");
         setIsSpeakingAI(true);
         setAiResponseText(text); // Display AI text while speaking
         setCurrentInterimText('');
       };
 
       utterance.onend = () => {
+        console.log("Web Speech API: Speech ended.");
         setIsSpeakingAI(false);
         setAiResponseText(''); // Clear AI text after speaking
         startRecognition(); // Automatically restart listening after AI finishes speaking
@@ -115,14 +121,16 @@ const Home: React.FC = () => {
         startRecognition(); // Restart listening on Web Speech API error
       };
 
+      console.log("Web Speech API: Attempting to speak:", text);
       window.speechSynthesis.speak(utterance);
     } else {
+      console.warn("Web Speech API: Not supported.");
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
       setAiResponseText(''); // Clear AI text if no support
       startRecognition(); // If Web Speech API is not supported, we still need to restart recognition
     }
-  }, [startRecognition, cancelSpeech]);
+  }, [startRecognition]);
 
   // Function to handle transcription completion and AI interaction
   // This function orchestrates the AI response and subsequent TTS.
@@ -225,6 +233,7 @@ const Home: React.FC = () => {
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
+      console.log("SpeechRecognition: Started.");
       setIsRecordingUser(true);
       setCurrentInterimText('');
       setAiResponseText('');
