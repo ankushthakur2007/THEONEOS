@@ -156,8 +156,10 @@ const Home: React.FC = () => {
     }
 
     if (isRecordingUser) {
+      // If currently recording, stop it. This case should ideally not be reached if button is hidden.
       recognitionRef.current?.stop();
     } else {
+      // If not recording, start it.
       startRecognition();
     }
   };
@@ -237,21 +239,17 @@ const Home: React.FC = () => {
         {(isRecordingUser || isSpeakingAI) && (
           <AudioVisualizer isAnimating={true} className="absolute inset-0 m-auto h-40 w-40" />
         )}
-        <Button
-          variant="default"
-          size="icon"
-          className={`w-24 h-24 rounded-full transition-all duration-300 relative z-10
-            ${isRecordingUser ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'}
-            ${isSpeakingAI ? 'opacity-50 cursor-not-allowed' : ''}`}
-          onClick={handleToggleRecording}
-          disabled={isSpeakingAI}
-        >
-          {isRecordingUser ? (
-            <StopCircle className="h-12 w-12" />
-          ) : (
+        {/* Only show the mic button when neither recording nor speaking */}
+        {!isRecordingUser && !isSpeakingAI && (
+          <Button
+            variant="default"
+            size="icon"
+            className="w-24 h-24 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
+            onClick={handleToggleRecording}
+          >
             <Mic className="h-12 w-12" />
-          )}
-        </Button>
+          </Button>
+        )}
         <p className="text-sm text-gray-400 mt-4">
           {isRecordingUser ? "Tap to stop recording" : (isSpeakingAI ? "AI is speaking..." : "Tap to speak")}
         </p>
