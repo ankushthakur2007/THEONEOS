@@ -60,17 +60,28 @@ const Home: React.FC = () => {
       setIsVoiceLoopActive(false); // Critical error, stop loop
       return;
     }
-    try {
-      cancelSpeech(); // Ensure any previous speech is stopped before listening
-      recognitionRef.current.start();
-      toast.info("Listening..."); // Show toast when recognition actually starts
-    } catch (error) {
-      console.error("Error starting speech recognition:", error);
-      toast.error("Failed to start voice input. Please tap the sparkle button.");
-      setIsRecordingUser(false);
-      setIsVoiceLoopActive(false); // Stop loop on recognition start error
+
+    // Prevent starting if already recording to avoid InvalidStateError
+    if (isRecordingUser) {
+      console.log("SpeechRecognition: Already recording, skipping start.");
+      return;
     }
-  }, [cancelSpeech]);
+
+    cancelSpeech(); // Ensure any previous speech is stopped before listening
+
+    // Add a small delay to allow the recognition state to fully reset after stopping
+    setTimeout(() => {
+      try {
+        recognitionRef.current?.start(); // Use optional chaining as it might be null if component unmounts
+        toast.info("Listening..."); // Show toast when recognition actually starts
+      } catch (error) {
+        console.error("Error starting speech recognition after delay:", error);
+        toast.error("Failed to start voice input. Please tap the sparkle button.");
+        setIsRecordingUser(false);
+        setIsVoiceLoopActive(false); // Stop loop on recognition start error
+      }
+    }, 100); // 100ms delay
+  }, [cancelSpeech, isRecordingUser]);
 
   // Function to play audio from URL (for ElevenLabs)
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
@@ -174,7 +185,7 @@ const Home: React.FC = () => {
   // Function to handle transcription completion and AI interaction
   const processUserSpeech = useCallback(async (text: string) => {
     setIsThinkingAI(true);
-    setCurrentInterimText(''); // Corrected typo here
+    setCurrentInterimText('');
     setAiResponseText('');
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
