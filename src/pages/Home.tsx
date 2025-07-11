@@ -118,12 +118,11 @@ const Home: React.FC = () => {
       setIsRecordingUser(false);
       const finalTranscribedText = finalTranscriptionRef.current.trim();
       if (finalTranscribedText) {
-        // Since AI functions are removed, we'll just log the transcription
-        console.log("Transcription complete (AI functions disabled):", finalTranscribedText);
-        toast.info("Transcription received, but AI features are disabled.");
+        handleTranscriptionComplete(finalTranscribedText);
       } else {
         toast.info("No speech detected. Tap the sparkle button to speak.");
         setCurrentInterimText('');
+        // No automatic restart here, return to idle
       }
       finalTranscriptionRef.current = '';
     };
@@ -144,9 +143,68 @@ const Home: React.FC = () => {
     if (isRecordingUser) {
       recognitionRef.current?.stop();
     } else {
-      // Prevent starting recognition if AI features are disabled
-      toast.error("AI features are currently disabled. Please re-enable the necessary Edge Functions.");
-      return;
+      startRecognition();
+    }
+  };
+
+  const handleTranscriptionComplete = async (text: string) => {
+    setIsThinkingAI(true);
+    setCurrentInterimText('');
+    setAiResponseText('');
+
+    try {
+      // 1. Call Gemini AI Edge Function
+      const geminiResponse = await supabase.functions.invoke('gemini-chat', {
+        body: { prompt: text },
+      });
+
+      if (geminiResponse.error) {
+        throw new Error(geminiResponse.error.message);
+      }
+
+      const aiText = geminiResponse.data.text;
+
+      // 2. Call Eleven Labs TTS Edge Function directly
+      const elevenLabsResponse = await supabase.functions.invoke('elevenlabs-tts', {
+        body: { text: aiText },
+      });
+
+      if (elevenLabsResponse.error) {
+        throw new Error(elevenLabsResponse.error.message);
+      }
+
+      if (!elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
+        const errorMessage = elevenLabsResponse.data?.error || JSON.stringify(elevenLabsResponse.data);
+        throw new Error(`Invalid response from Eleven Labs TTS function: ${errorMessage}`);
+      }
+
+      const audioUrl = elevenLabsResponse.data.audioUrl;
+      playAudioAndThenListen(audioUrl, aiText);
+
+      // 3. Store interaction in Supabase
+      if (session?.user?.id) {
+        const { error: dbError } = await supabase.from('interactions').insert({
+          user_id: session.user.id,
+          input_text: text,
+          response_text: aiText,
+          audio_url: audioUrl,
+        });
+        if (dbError) {
+          console.error('Error saving interaction:', dbError.message);
+          toast.error('Failed to save interaction history.');
+        }
+      }
+
+      toast.success("AI response received!");
+
+    } catch (error: any) {
+      console.error('Error interacting with AI or TTS:', error);
+      toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
+      setIsSpeakingAI(false); // Ensure speaking state is false on error
+      setAiResponseText('');
+      // No automatic restart here, return to idle
+    } finally {
+      setIsThinkingAI(false);
     }
   };
 
@@ -157,7 +215,7 @@ const Home: React.FC = () => {
     ? "Thinking..."
     : isSpeakingAI
     ? aiResponseText || "AI is speaking..." // Show AI response text if available, else "AI is speaking..."
-    : "AI features disabled"; // Default message when idle
+    : "Tap to speak"; // Default message when idle
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-gray-900 text-white p-4">
@@ -171,11 +229,10 @@ const Home: React.FC = () => {
           <Button
             variant="default"
             size="icon"
-            className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-gray-600 hover:bg-gray-700 cursor-not-allowed" // Changed color and cursor
+            className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
             onClick={handleToggleRecording}
-            disabled={true} // Disable the button
           >
-            <Sparkles className="h-36 w-36" />
+            <Sparkles className="h-36 w-36" /> {/* Increased icon size to fill button better */}
           </Button>
         )}
       </div>
