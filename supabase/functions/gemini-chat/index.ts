@@ -12,7 +12,8 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt } = await req.json();
+    // Destructure prompt and history from the request body
+    const { prompt, history } = await req.json();
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 
     if (!geminiApiKey) {
@@ -26,7 +27,16 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    const result = await model.generateContent(prompt);
+    // Start a chat session with the provided history
+    const chat = model.startChat({
+      history: history || [], // Use provided history, or an empty array if none
+      generationConfig: {
+        maxOutputTokens: 200, // Limit output length to prevent excessively long responses
+      },
+    });
+
+    // Send the current prompt
+    const result = await chat.sendMessage(prompt);
     const response = await result.response;
     const text = response.text();
 

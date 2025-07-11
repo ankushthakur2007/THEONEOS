@@ -4,6 +4,11 @@ import { useSession } from '@/components/SessionContextProvider';
 import { toast } from 'sonner';
 import { Sparkles } from 'lucide-react';
 
+interface ChatMessage {
+  role: 'user' | 'model';
+  parts: { text: string }[];
+}
+
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const [isRecordingUser, setIsRecordingUser] = useState(false);
@@ -11,6 +16,7 @@ const Home: React.FC = () => {
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]); // New state for conversation history
   const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -109,10 +115,17 @@ const Home: React.FC = () => {
     setCurrentInterimText('');
     setAiResponseText('');
 
+    const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
+    // Create the new history array *before* sending the request
+    const updatedMessagesForAI = [...messages, newUserMessage];
+
+    // Optimistically update local state for display
+    setMessages(prevMessages => [...prevMessages, newUserMessage]);
+
     try {
-      // 1. Call Gemini AI Edge Function
+      // 1. Call Gemini AI Edge Function with full history
       const geminiResponse = await supabase.functions.invoke('gemini-chat', {
-        body: { prompt: text },
+        body: { prompt: text, history: updatedMessagesForAI }, // Send the history including the current user message
       });
 
       if (geminiResponse.error) {
@@ -120,6 +133,9 @@ const Home: React.FC = () => {
       }
 
       const aiText = geminiResponse.data.text;
+      const newAiMessage: ChatMessage = { role: 'model', parts: [{ text: aiText }] };
+      // Update messages state with AI's response
+      setMessages(prevMessages => [...prevMessages, newAiMessage]);
 
       let audioUrl: string | null = null;
       let ttsUsedFallback = false;
@@ -172,12 +188,13 @@ const Home: React.FC = () => {
       toast.error(`Failed to get AI response: ${error.message}. Tap the sparkle button to try again.`);
       setIsSpeakingAI(false); // Ensure speaking state is false on error
       setAiResponseText('');
-      // If AI interaction fails, we need to restart recognition for the user to try again
+      // If AI interaction fails, remove the last user message from history to avoid sending it again
+      setMessages(prevMessages => prevMessages.slice(0, -1));
       startRecognition();
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText, startRecognition]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setIsThinkingAI, setCurrentInterimText, setAiResponseText, startRecognition, messages]);
 
   // Initialize Speech Recognition
   useEffect(() => {
