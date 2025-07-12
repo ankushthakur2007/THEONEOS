@@ -2,24 +2,21 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
 interface UseSpeechRecognitionReturn {
-  startRecognition: () => void;
+  listen: () => Promise<string>;
   stopRecognition: () => void;
   isRecording: boolean;
   currentInterimText: string;
-  finalTranscriptionRef: React.MutableRefObject<string>;
   isRecognitionReady: boolean;
 }
 
-export function useSpeechRecognition(
-  onFinalResult: (text: string) => void,
-  onRecognitionError: (event: SpeechRecognitionErrorEvent) => void,
-  onRecognitionEnd: () => void
-): UseSpeechRecognitionReturn {
+export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const [isRecording, setIsRecording] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [isRecognitionReady, setIsRecognitionReady] = useState(false);
-  const finalTranscriptionRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const resolvePromiseRef = useRef<((value: string | PromiseLike<string>) => void) | null>(null);
+  const rejectPromiseRef = useRef<((reason?: any) => void) | null>(null);
+  const finalTranscriptionRef = useRef<string>('');
 
   const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
     let interimTranscript = '';
@@ -38,51 +35,71 @@ export function useSpeechRecognition(
   }, []);
 
   const handleRecognitionEnd = useCallback(() => {
-    console.log("Speech recognition session ended.");
+    console.log("SpeechRecognition session ended.");
     setIsRecording(false);
-    onRecognitionEnd(); // Notify parent hook/component
-  }, [onRecognitionEnd]);
+    if (resolvePromiseRef.current) {
+      const finalTranscribedText = finalTranscriptionRef.current.trim();
+      if (finalTranscribedText) {
+        resolvePromiseRef.current(finalTranscribedText);
+      } else {
+        rejectPromiseRef.current?.(new Error("No speech detected."));
+      }
+      resolvePromiseRef.current = null;
+      rejectPromiseRef.current = null;
+    }
+    finalTranscriptionRef.current = '';
+    setCurrentInterimText('');
+  }, []);
 
   const handleRecognitionError = useCallback((event: SpeechRecognitionErrorEvent) => {
     console.error('Speech recognition error:', event.error);
     setIsRecording(false);
-    onRecognitionError(event); // Notify parent hook/component
-  }, [onRecognitionError]);
+    rejectPromiseRef.current?.(new Error(`Speech recognition error: ${event.error}`));
+    resolvePromiseRef.current = null;
+    rejectPromiseRef.current = null;
+    finalTranscriptionRef.current = '';
+    setCurrentInterimText('');
+  }, []);
 
-  const startRecognition = useCallback(() => {
-    if (!recognitionRef.current) {
-      console.error("SpeechRecognition object not initialized when trying to start.");
-      toast.error("Voice input not ready. Please try again.");
-      return;
-    }
+  const listen = useCallback((): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!recognitionRef.current) {
+        toast.error("Voice input not ready. Please try again.");
+        return reject(new Error("SpeechRecognition object not initialized."));
+      }
 
-    // Check if recognition is already active using the 'recognizing' property
-    // Removed SpeechRecognition.State.ACTIVE as it's not a standard property.
-    if (recognitionRef.current.recognizing) {
-      recognitionRef.current.stop();
-      console.log("SpeechRecognition: Forced stop before new start.");
-    }
+      if ((recognitionRef.current as any).recognizing) {
+        recognitionRef.current.stop();
+        console.log("SpeechRecognition: Forced stop before new start.");
+      }
 
-    setTimeout(() => {
+      resolvePromiseRef.current = resolve;
+      rejectPromiseRef.current = reject;
+
       try {
-        // Guarded access: ensure recognitionRef.current exists before calling start()
-        if (recognitionRef.current) {
-          recognitionRef.current.start();
-          toast.info("Listening...");
-        }
+        recognitionRef.current.start();
+        toast.info("Listening...");
+        setIsRecording(true);
+        finalTranscriptionRef.current = '';
+        setCurrentInterimText('');
       } catch (error) {
-        console.error("Error starting speech recognition after delay:", error);
+        console.error("Error starting speech recognition:", error);
         toast.error("Failed to start voice input.");
         setIsRecording(false);
+        reject(error);
       }
-    }, 500);
+    });
   }, []);
 
   const stopRecognition = useCallback(() => {
-    // Guarded access: ensure recognitionRef.current exists before calling stop()
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsRecording(false);
+      rejectPromiseRef.current?.(new Error("Speech recognition stopped by user."));
+      resolvePromiseRef.current = null;
+      rejectPromiseRef.current = null;
+      finalTranscriptionRef.current = '';
+      setCurrentInterimText('');
     }
   }, []);
 
@@ -93,7 +110,6 @@ export function useSpeechRecognition(
         return;
       }
 
-      // Robust constructor check: Don't refer to the bare global SpeechRecognition at all
       const SpeechRecognitionConstructor =
         window.SpeechRecognition || (window as any).webkitSpeechRecognition || null;
 
@@ -104,20 +120,12 @@ export function useSpeechRecognition(
         return;
       }
 
-      // Now that we have a valid constructor, use it:
       const recognition = new SpeechRecognitionConstructor();
       recognitionRef.current = recognition;
 
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        console.log("SpeechRecognition: Started.");
-        setIsRecording(true);
-        setCurrentInterimText('');
-        finalTranscriptionRef.current = '';
-      };
 
       recognition.onresult = handleRecognitionResult;
       recognition.onerror = handleRecognitionError;
@@ -126,11 +134,9 @@ export function useSpeechRecognition(
       setIsRecognitionReady(true);
     };
 
-    const timeoutId = setTimeout(initializeSpeechRecognition, 0);
+    initializeSpeechRecognition();
 
     return () => {
-      clearTimeout(timeoutId);
-      // Guarded access: ensure recognitionRef.current exists before calling stop()
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
@@ -138,20 +144,11 @@ export function useSpeechRecognition(
     };
   }, [handleRecognitionResult, handleRecognitionError, handleRecognitionEnd]);
 
-  // Effect to process final transcription when recognition ends
-  useEffect(() => {
-    if (!isRecording && finalTranscriptionRef.current.trim() !== '') {
-      onFinalResult(finalTranscriptionRef.current.trim());
-      finalTranscriptionRef.current = ''; // Clear after processing
-    }
-  }, [isRecording, onFinalResult]);
-
   return {
-    startRecognition,
+    listen,
     stopRecognition,
     isRecording,
     currentInterimText,
-    finalTranscriptionRef,
     isRecognitionReady,
   };
 }
