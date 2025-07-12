@@ -23,10 +23,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const isVoiceLoopActiveRef = useRef(isVoiceLoopActive);
 
   const [isRecordingUser, setIsRecordingUser] = useState(false);
-  const [isSpeakingAI, setIsSpeakingAI] = useState(false);
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
-  const [aiResponseText, setAiResponseText] = useState('');
 
   // Keep the ref in sync with the state for external checks, but for internal loop control,
   // we'll update the ref directly in start/stop functions.
@@ -52,6 +50,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
 
   const {
     speakAIResponse,
+    isSpeakingAI, // Consume isSpeakingAI from useTextToSpeech
+    aiResponseText, // Consume aiResponseText from useTextToSpeech
     audioRef,
     cancelSpeech,
   } = useTextToSpeech(supabase);
@@ -67,10 +67,9 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   // Modified resetAllFlags to only reset state, not stop underlying APIs
   const resetAllFlags = useCallback(() => {
     setIsRecordingUser(false);
-    setIsSpeakingAI(false);
     setIsThinkingAI(false);
     setCurrentInterimText('');
-    setAiResponseText('');
+    // isSpeakingAI and aiResponseText are managed by useTextToSpeech
   }, []);
 
   const runVoiceLoop = useCallback(async () => {
@@ -108,6 +107,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       let aiResponse: { text: string; audioUrl: string | null } | null = null;
       try {
         setIsThinkingAI(true);
+        // processSpeech now handles calling speakAIResponse internally
         aiResponse = await processSpeech(userText);
       } catch (error: any) {
         console.error("Think phase failed:", error.message);
@@ -121,79 +121,28 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
 
       setIsThinkingAI(false);
 
-      if (aiResponse && aiResponse.text) {
-        try {
-          setIsSpeakingAI(true);
-          setAiResponseText(aiResponse.text);
+      // The audio playback is now handled entirely within processSpeech (which calls speakAIResponse).
+      // We just need to wait for the speaking to finish before continuing the loop.
+      // The `isSpeakingAI` state from `useTextToSpeech` will correctly reflect this.
+      // We don't need to explicitly await a new Promise here for audio playback.
+      // The loop will naturally continue once the `isSpeakingAI` state becomes false.
 
-          await new Promise<void>((resolve, reject) => {
-            if (audioRef.current && aiResponse.audioUrl) {
-              audioRef.current.src = aiResponse.audioUrl;
-              audioRef.current.onended = () => {
-                setIsSpeakingAI(false);
-                setAiResponseText('');
-                resolve();
-              };
-              audioRef.current.onerror = (e) => {
-                console.error("ElevenLabs Audio Playback Error:", e);
-                toast.error("ElevenLabs audio playback failed. Falling back to browser voice.");
-                setIsSpeakingAI(false);
-                setAiResponseText('');
-                const utter = new SpeechSynthesisUtterance(aiResponse.text);
-                utter.onend = () => {
-                  setIsSpeakingAI(false);
-                  setAiResponseText('');
-                  resolve();
-                };
-                utter.onerror = (event) => {
-                  console.error('Web Speech API error during fallback:', event.error);
-                  toast.error("Browser speech synthesis failed during fallback.");
-                  setIsSpeakingAI(false);
-                  setAiResponseText('');
-                  reject(new Error("Fallback speech failed."));
-                };
-                window.speechSynthesis.speak(utter);
-              };
-              audioRef.current.play().catch(e => {
-                console.error("Error playing ElevenLabs audio:", e);
-                audioRef.current?.onerror?.(new Event('error'));
-              });
-            } else {
-              const utter = new SpeechSynthesisUtterance(aiResponse.text);
-              utter.onend = () => {
-                setIsSpeakingAI(false);
-                setAiResponseText('');
-                resolve();
-              };
-              utter.onerror = (event) => {
-                console.error('Web Speech API error:', event.error);
-                toast.error("Browser speech synthesis failed.");
-                setIsSpeakingAI(false);
-                setAiResponseText('');
-                reject(new Error("Browser speech failed."));
-              };
-              window.speechSynthesis.speak(utter);
-            }
-          });
-        } catch (error: any) {
-          console.error("Speak phase failed:", error.message);
-          toast.error(`AI speaking error: ${error.message}`);
-          setIsSpeakingAI(false);
-          // If AI speaking fails, stop the loop and return to idle
-          setIsVoiceLoopActive(false);
-          isVoiceLoopActiveRef.current = false;
-          return;
-        }
-      } else {
+      // If AI response text was empty, stop the loop
+      if (!aiResponse || !aiResponse.text) {
         console.warn("AI response text was empty, skipping speak phase. Returning to idle mode.");
         setIsVoiceLoopActive(false);
         isVoiceLoopActiveRef.current = false;
         return;
       }
+      
+      // Wait for AI to finish speaking before looping again
+      // This is implicitly handled by the next iteration of the while loop
+      // as `isSpeakingAI` will be true until the audio finishes.
+      // The `resetAllFlags` at the start of the next loop iteration will clear states.
     }
     resetAllFlags(); // Final reset when loop truly stops
     toast.info("Voice loop stopped.");
-  }, [listen, processSpeech, audioRef, resetAllFlags]);
+  }, [listen, processSpeech, resetAllFlags]);
 
   const startVoiceLoop = useCallback(() => {
     if (!isVoiceLoopActiveRef.current) { // Check the ref directly
@@ -217,10 +166,10 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     startVoiceLoop,
     stopVoiceLoop,
     isRecordingUser,
-    isSpeakingAI,
+    isSpeakingAI, // Return from useTextToSpeech
     isThinkingAI,
     currentInterimText,
-    aiResponseText,
+    aiResponseText, // Return from useTextToSpeech
     isRecognitionReady,
     audioRef,
   };
