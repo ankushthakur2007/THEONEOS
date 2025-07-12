@@ -28,7 +28,7 @@ serve(async (req) => {
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     // Define the system instruction for tool awareness
-    const systemInstruction = `You are JARVIS — an intelligent, voice-powered assistant who talks to users and can optionally use external tools.
+    const systemInstructionText = `You are JARVIS — an intelligent, voice-powered assistant who talks to users and can optionally use external tools.
 
 You must always:
 - Think before responding
@@ -81,7 +81,11 @@ Otherwise, reply naturally`;
       generationConfig: {
         maxOutputTokens: 200, // Limit output length to prevent excessively long responses
       },
-      systemInstruction: systemInstruction, // Apply the system instruction
+      // Correctly format systemInstruction as a Content object
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: systemInstructionText }],
+      },
     });
 
     // Send the current prompt
