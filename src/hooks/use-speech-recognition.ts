@@ -62,10 +62,21 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   }, []);
 
   const listen = useCallback((): Promise<string> => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       if (!recognitionRef.current) {
         toast.error("Voice input not ready. Please try again.");
         return reject(new Error("SpeechRecognition object not initialized."));
+      }
+
+      // Explicitly request microphone access before starting recognition
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("Microphone access granted for speech recognition.");
+      } catch (err) {
+        console.error("Microphone access denied for speech recognition:", err);
+        toast.error("Microphone access denied. Please enable microphone permissions in your browser settings.");
+        setIsRecording(false);
+        return reject(new Error("Microphone access denied."));
       }
 
       if ((recognitionRef.current as any).recognizing) {
