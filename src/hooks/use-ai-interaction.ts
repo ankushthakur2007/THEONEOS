@@ -19,9 +19,11 @@ const MAX_HISTORY_MESSAGES = 5;
 
 // Function to run DuckDuckGo search
 async function runSearchTool(query: string): Promise<string> {
+  console.log("Attempting search for query:", query); // Log the query
   try {
     const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1`);
     const json = await res.json();
+    console.log("DuckDuckGo API response:", json); // Log the full JSON response
 
     return (
       json.Answer ||
