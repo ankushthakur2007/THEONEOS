@@ -15,50 +15,42 @@ export const SessionContextProvider: React.FC<{ children: React.ReactNode }> = (
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const checkProfileAndRedirect = async (currentSession: Session | null) => {
-    if (currentSession) {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('first_name, last_name')
-        .eq('id', currentSession.user.id)
-        .single();
-
-      if (error || !profile || !profile.first_name || !profile.last_name) {
-        // Profile incomplete, redirect to complete profile page
-        if (window.location.pathname !== '/complete-profile') {
-          navigate('/complete-profile', { replace: true });
-        }
-      } else {
-        // Profile complete, redirect to home if on login/index/complete-profile
-        if (window.location.pathname === '/login' || window.location.pathname === '/' || window.location.pathname === '/complete-profile') {
-          navigate('/home', { replace: true });
-        }
-      }
-    } else {
-      // No session, redirect to login
-      if (window.location.pathname !== '/login') {
-        navigate('/login', { replace: true });
-      }
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
-      checkProfileAndRedirect(currentSession);
+      if (currentSession) {
+        // User is authenticated, redirect to home if not already there
+        if (window.location.pathname === '/login' || window.location.pathname === '/') {
+          navigate('/home', { replace: true });
+        }
+      } else {
+        // User is not authenticated, redirect to login if not already there
+        if (window.location.pathname !== '/login') {
+          navigate('/login', { replace: true });
+        }
+      }
+      setLoading(false);
     });
 
     // Initial session check
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       setSession(initialSession);
-      checkProfileAndRedirect(initialSession);
+      if (initialSession) {
+        if (window.location.pathname === '/login' || window.location.pathname === '/') {
+          navigate('/home', { replace: true });
+        }
+      } else {
+        if (window.location.pathname !== '/login') {
+          navigate('/login', { replace: true });
+        }
+      }
+      setLoading(false);
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate]); // Only navigate is a dependency here, checkProfileAndRedirect is stable
+  }, [navigate]);
 
   if (loading) {
     return (
