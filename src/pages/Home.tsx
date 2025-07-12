@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { Sparkles, X } from 'lucide-react';
 import { useVoiceLoop } from '@/hooks/use-voice-loop';
-import WakeWordListener from '@/components/WakeWordListener'; // New import
+import { WakeWordListener } from '@/components/WakeWordListener'; // Changed to named import
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
