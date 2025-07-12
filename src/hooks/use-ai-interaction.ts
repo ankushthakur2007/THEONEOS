@@ -30,7 +30,7 @@ async function runSearchTool(query: string): Promise<string> {
       json.Abstract ||
       json.Definition ||
       json.RelatedTopics?.[0]?.Text ||
-      "I couldn't find anything online."
+      `I couldn't find a direct answer for "${query}" online.` // More specific fallback
     );
   } catch (e) {
     console.error("Search error:", e);
