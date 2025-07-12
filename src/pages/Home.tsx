@@ -3,13 +3,13 @@ import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { X } from 'lucide-react';
 import { useVoiceLoop } from '@/hooks/use-voice-loop';
-import { WakeWordListener } from '@/components/WakeWordListener';
+// import { WakeWordListener } from '@/components/WakeWordListener'; // REMOVE THIS IMPORT
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const {
     isVoiceLoopActive,
-    startVoiceLoop,
+    startVoiceLoop, // Still needed for manual start if desired, though wake word is primary
     stopVoiceLoop,
     isRecordingUser,
     isSpeakingAI,
@@ -17,11 +17,14 @@ const Home: React.FC = () => {
     currentInterimText,
     aiResponseText,
     audioRef,
+    isRecognitionReady, // Use this to indicate if mic is ready
   } = useVoiceLoop(supabase, session);
 
   // Determine the main status text to display
   let displayMessage: string;
-  if (isRecordingUser) {
+  if (!isRecognitionReady) {
+    displayMessage = "Initializing voice input...";
+  } else if (isRecordingUser) {
     displayMessage = currentInterimText || "Listening...";
   } else if (isThinkingAI) {
     displayMessage = "Thinking...";
@@ -83,8 +86,8 @@ const Home: React.FC = () => {
         </div>
       )}
 
-      {/* WakeWordListener is active only when the main voice loop is NOT active */}
-      <WakeWordListener onWake={startVoiceLoop} isActive={!isVoiceLoopActive} />
+      {/* WakeWordListener is no longer needed here, its functionality is absorbed */}
+      {/* <WakeWordListener onWake={startVoiceLoop} isActive={!isVoiceLoopActive} /> */}
     </div>
   );
 };
