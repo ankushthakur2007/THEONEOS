@@ -56,15 +56,20 @@ export function useSpeechRecognition(
       return;
     }
 
-    if (recognitionRef.current.recognizing || (recognitionRef.current as any).readyState === SpeechRecognition.State.ACTIVE) {
+    // Check if recognition is already active using the 'recognizing' property
+    // Removed SpeechRecognition.State.ACTIVE as it's not a standard property.
+    if (recognitionRef.current.recognizing) {
       recognitionRef.current.stop();
       console.log("SpeechRecognition: Forced stop before new start.");
     }
 
     setTimeout(() => {
       try {
-        recognitionRef.current?.start();
-        toast.info("Listening...");
+        // Guarded access: ensure recognitionRef.current exists before calling start()
+        if (recognitionRef.current) {
+          recognitionRef.current.start();
+          toast.info("Listening...");
+        }
       } catch (error) {
         console.error("Error starting speech recognition after delay:", error);
         toast.error("Failed to start voice input.");
@@ -74,6 +79,7 @@ export function useSpeechRecognition(
   }, []);
 
   const stopRecognition = useCallback(() => {
+    // Guarded access: ensure recognitionRef.current exists before calling stop()
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsRecording(false);
@@ -87,13 +93,9 @@ export function useSpeechRecognition(
         return;
       }
 
-      let SpeechRecognitionConstructor: typeof SpeechRecognition | undefined;
-
-      if (typeof window.SpeechRecognition === 'function') {
-        SpeechRecognitionConstructor = window.SpeechRecognition;
-      } else if (typeof (window as any).webkitSpeechRecognition === 'function') {
-        SpeechRecognitionConstructor = (window as any).webkitSpeechRecognition;
-      }
+      // Robust constructor check: Don't refer to the bare global SpeechRecognition at all
+      const SpeechRecognitionConstructor =
+        window.SpeechRecognition || (window as any).webkitSpeechRecognition || null;
 
       if (!SpeechRecognitionConstructor) {
         console.error("Speech recognition API not found or not a valid constructor.");
@@ -102,8 +104,9 @@ export function useSpeechRecognition(
         return;
       }
 
-      recognitionRef.current = new SpeechRecognitionConstructor();
-      const recognition = recognitionRef.current;
+      // Now that we have a valid constructor, use it:
+      const recognition = new SpeechRecognitionConstructor();
+      recognitionRef.current = recognition;
 
       recognition.continuous = false;
       recognition.interimResults = true;
@@ -127,6 +130,7 @@ export function useSpeechRecognition(
 
     return () => {
       clearTimeout(timeoutId);
+      // Guarded access: ensure recognitionRef.current exists before calling stop()
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
