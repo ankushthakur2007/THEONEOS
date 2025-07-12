@@ -27,7 +27,7 @@ export function WakeWordListener({ onWake }: WakeWordListenerProps) {
     const recognition = new SpeechRecognitionConstructor();
     recognition.continuous = true;
     recognition.interimResults = false;
-    recognition.lang = "en-US"; // Changed to en-US
+    recognition.lang = "en-US";
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
@@ -40,32 +40,42 @@ export function WakeWordListener({ onWake }: WakeWordListenerProps) {
       }
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error("WakeWordListener error:", event.error);
-      if (event.error === 'not-allowed') {
-        toast.error("Microphone access denied for wake word listener. Please enable permissions.");
-      } else {
-        toast.error(`Wake word listener error: ${event.error}`);
-      }
-    };
+    // Request microphone access before starting recognition
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(() => {
+        // Microphone access granted, proceed with recognition
+        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+          console.error("WakeWordListener error:", event.error);
+          if (event.error === 'not-allowed') {
+            toast.error("Microphone access denied for wake word listener. Please enable permissions.");
+          } else {
+            toast.error(`Wake word listener error: ${event.error}`);
+          }
+        };
 
-    recognition.onend = () => {
-      console.log("WakeWordListener: Recognition ended. Restarting…");
-      try {
-        recognition.start();
-      } catch (e: any) {
-        console.error("WakeWordListener: Failed to restart recognition:", e);
-      }
-    };
+        recognition.onend = () => {
+          console.log("WakeWordListener: Recognition ended. Restarting…");
+          try {
+            recognition.start();
+          } catch (e: any) {
+            console.error("WakeWordListener: Failed to restart recognition:", e);
+          }
+        };
 
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-      console.log("WakeWordListener: Initial recognition started.");
-    } catch (e: any) {
-      console.error("WakeWordListener: Initial start failed:", e);
-      toast.error("Failed to start wake word listener initially.");
-    }
+        recognitionRef.current = recognition;
+        try {
+          recognition.start(); // Start recognition after getting permission
+          console.log("WakeWordListener: Initial recognition started.");
+        } catch (e: any) {
+          console.error("WakeWordListener: Initial start failed:", e);
+          toast.error("Failed to start wake word listener initially.");
+        }
+      })
+      .catch((err) => {
+        // Handle the case where microphone access is denied or fails
+        console.error("WakeWordListener: Microphone access denied or failed:", err);
+        toast.error("Microphone access is required for the wake word listener.");
+      });
 
     return () => {
       if (recognitionRef.current) {
