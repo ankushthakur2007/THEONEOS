@@ -8,7 +8,7 @@ interface ChatMessage {
 }
 
 interface UseAIInteractionReturn {
-  processSpeech: (text: string) => Promise<void>;
+  processSpeech: (text: string) => Promise<{ text: string; audioUrl: string | null }>;
   isThinkingAI: boolean;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -20,13 +20,12 @@ export function useAIInteraction(
   supabase: SupabaseClient,
   session: Session | null,
   speakAIResponse: (text: string) => Promise<string | null>,
-  onAIInteractionComplete: () => void,
-  onAIInteractionError: () => void
+  // Removed onAIInteractionComplete and onAIInteractionError as they are now handled by runVoiceLoop
 ): UseAIInteractionReturn {
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  const processSpeech = useCallback(async (text: string) => {
+  const processSpeech = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
     setIsThinkingAI(true);
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
@@ -72,8 +71,7 @@ export function useAIInteraction(
       if (!aiText) {
         toast.info("AI returned an empty response.");
         setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
-        onAIInteractionError();
-        return;
+        throw new Error("AI returned an empty response."); // Propagate error for runVoiceLoop to catch
       }
 
       // Speak the AI response and get the audio URL if ElevenLabs was used
@@ -98,17 +96,17 @@ export function useAIInteraction(
       }
 
       toast.success("AI response received!");
-      onAIInteractionComplete();
+      return { text: aiText, audioUrl }; // Return the AI text and audio URL
 
     } catch (error: any) {
       console.error('Overall error in AI interaction:', error);
       toast.error(`Failed to get AI response: ${error.message}.`);
       setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message on error
-      onAIInteractionError();
+      throw error; // Re-throw error for runVoiceLoop to catch
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, speakAIResponse, onAIInteractionComplete, onAIInteractionError]);
+  }, [supabase, session, speakAIResponse]);
 
   return {
     processSpeech,

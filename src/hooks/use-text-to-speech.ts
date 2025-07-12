@@ -10,7 +10,10 @@ interface UseTextToSpeechReturn {
   cancelSpeech: () => void;
 }
 
-export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => void, onSpeechError: () => void): UseTextToSpeechReturn {
+export function useTextToSpeech(
+  supabase: SupabaseClient,
+  // Removed onSpeechEnd and onSpeechError as they are now handled by runVoiceLoop
+): UseTextToSpeechReturn {
   const [isSpeakingAI, setIsSpeakingAI] = useState(false);
   const [aiResponseText, setAiResponseText] = useState('');
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -32,6 +35,8 @@ export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => voi
     }
   }, []);
 
+  // playAudioAndThenListen and speakWithWebSpeechAPI will no longer call external callbacks.
+  // Their internal onended/onerror will just manage local state.
   const playAudioAndThenListen = useCallback((audioUrl: string, aiText: string) => {
     if (audioRef.current) {
       audioRef.current.src = audioUrl;
@@ -44,14 +49,14 @@ export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => voi
         console.error("Error attempting to play ElevenLabs audio:", e);
         toast.error(`Audio playback failed: ${e.message}.`);
         setIsSpeakingAI(false);
-        onSpeechError();
+        // onSpeechError(); // Removed external callback
       });
 
       audioRef.current.onended = () => {
         console.log("ElevenLabs Audio: Playback ended.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        onSpeechEnd();
+        // onSpeechEnd(); // Removed external callback
       };
 
       audioRef.current.onerror = () => {
@@ -59,10 +64,10 @@ export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => voi
         toast.error("Audio playback error.");
         setIsSpeakingAI(false);
         setAiResponseText('');
-        onSpeechError();
+        // onSpeechError(); // Removed external callback
       };
     }
-  }, [onSpeechEnd, onSpeechError]);
+  }, []); // Removed onSpeechEnd, onSpeechError from dependencies
 
   const speakWithWebSpeechAPI = useCallback((text: string) => {
     if (!('speechSynthesis' in window)) {
@@ -70,7 +75,7 @@ export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => voi
       toast.error("Browser does not support Web Speech API for text-to-speech.");
       setIsSpeakingAI(false);
       setAiResponseText('');
-      onSpeechError();
+      // onSpeechError(); // Removed external callback
       return;
     }
 
@@ -81,7 +86,7 @@ export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => voi
         clearTimeout(speechTimeoutIdRef.current);
         speechTimeoutIdRef.current = null;
       }
-      onSpeechEnd();
+      // onSpeechEnd(); // Removed external callback
     };
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -112,12 +117,12 @@ export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => voi
       console.error('Web Speech API error:', event.error);
       toast.error("Browser speech synthesis failed.");
       resetSpeechState();
-      onSpeechError();
+      // onSpeechError(); // Removed external callback
     };
 
     console.log("Web Speech API: Attempting to speak full text.");
     window.speechSynthesis.speak(utterance);
-  }, [onSpeechEnd, onSpeechError]);
+  }, []); // Removed onSpeechEnd, onSpeechError from dependencies
 
   const speakAIResponse = useCallback(async (aiText: string): Promise<string | null> => {
     let audioUrl: string | null = null;
@@ -147,10 +152,10 @@ export function useTextToSpeech(supabase: SupabaseClient, onSpeechEnd: () => voi
 
     if (!ttsAttempted) {
       console.warn("No TTS method was attempted.");
-      onSpeechError(); // Indicate an error if no TTS was attempted
+      // onSpeechError(); // Removed external callback
     }
     return audioUrl;
-  }, [supabase, playAudioAndThenListen, speakWithWebSpeechAPI, onSpeechError]);
+  }, [supabase, playAudioAndThenListen, speakWithWebSpeechAPI]); // Removed onSpeechError from dependencies
 
   return {
     speakAIResponse,
