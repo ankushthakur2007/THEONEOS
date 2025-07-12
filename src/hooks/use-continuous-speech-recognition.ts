@@ -53,13 +53,6 @@ export function useContinuousSpeechRecognition(
     onError(event.error);
   }, [onError]);
 
-  const handleEnd = useCallback(() => {
-    console.log("Continuous speech recognition session ended.");
-    setIsListening(false);
-    // The `startListening` function should be called externally to restart if needed.
-    // This hook just reports its state.
-  }, []);
-
   const startListening = useCallback(async () => {
     if (!recognitionRef.current) {
       toast.error("Speech recognition not initialized.");
@@ -94,6 +87,16 @@ export function useContinuousSpeechRecognition(
       onError(`Failed to start recognition: ${error.message}`);
     }
   }, [onError, resetTranscript]);
+
+  const handleEnd = useCallback(() => {
+    console.log("Continuous speech recognition session ended. Attempting to restart.");
+    setIsListening(false);
+    // Automatically restart listening to maintain continuous operation
+    // Add a small delay to prevent rapid restarts if there's an immediate error
+    setTimeout(() => {
+      startListening(); // Call startListening from within the hook
+    }, 500);
+  }, [startListening]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current && (recognitionRef.current as any).recognizing) {

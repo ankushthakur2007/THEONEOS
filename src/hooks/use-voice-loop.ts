@@ -228,7 +228,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     if (isVoiceLoopActiveRef.current) {
       setIsVoiceLoopActive(false);
       isVoiceLoopActiveRef.current = false;
-      // Cancel any ongoing speech
+      // srStopRecognition(); // REMOVED: Continuous listener should remain active
       cancelSpeech();
       // Reject any pending user command promise
       if (rejectUserCommandRef.current) {
@@ -238,7 +238,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       }
       // The continuous listener remains active for wake word detection
     }
-  }, [cancelSpeech]);
+  }, [cancelSpeech]); // Removed srStopRecognition from dependencies
 
   return {
     isVoiceLoopActive,
