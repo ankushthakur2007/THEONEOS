@@ -3,21 +3,21 @@ import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
 import { X } from 'lucide-react';
 import { useVoiceLoop } from '@/hooks/use-voice-loop';
-// import { WakeWordListener } from '@/components/WakeWordListener'; // REMOVE THIS IMPORT
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const {
     isVoiceLoopActive,
-    startVoiceLoop, // Still needed for manual start if desired, though wake word is primary
+    startVoiceLoop,
     stopVoiceLoop,
     isRecordingUser,
     isSpeakingAI,
     isThinkingAI,
+    isSearchingAI, // New state
     currentInterimText,
     aiResponseText,
     audioRef,
-    isRecognitionReady, // Use this to indicate if mic is ready
+    isRecognitionReady,
   } = useVoiceLoop(supabase, session);
 
   // Determine the main status text to display
@@ -26,12 +26,14 @@ const Home: React.FC = () => {
     displayMessage = "Initializing voice input...";
   } else if (isRecordingUser) {
     displayMessage = currentInterimText || "Listening...";
-  } else if (isThinkingAI) {
-    displayMessage = "Thinking...";
   } else if (isSpeakingAI) {
     displayMessage = aiResponseText || "AI is speaking...";
+  } else if (isSearchingAI) { // Prioritize searching message
+    displayMessage = "Searching...";
+  } else if (isThinkingAI) {
+    displayMessage = "Thinking...";
   } else {
-    displayMessage = "Say 'jarvis' to activate"; // Updated idle message
+    displayMessage = "Say 'jarvis' to activate";
   };
 
   return (
@@ -45,8 +47,8 @@ const Home: React.FC = () => {
           </div>
         )}
 
-        {isVoiceLoopActive && !isSpeakingAI && (
-          // Wake word detected / Listening / Thinking state: Three smaller balls
+        {/* Jiggling balls for active voice loop (listening, thinking, searching) */}
+        {isVoiceLoopActive && !isSpeakingAI && (isRecordingUser || isThinkingAI || isSearchingAI) && (
           <div className="flex space-x-4">
             <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0s' }}></div>
             <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0.2s' }}></div>
@@ -54,8 +56,8 @@ const Home: React.FC = () => {
           </div>
         )}
 
-        {/* Text display for user input or AI thinking */}
-        {(isVoiceLoopActive && (isRecordingUser || isThinkingAI)) && (
+        {/* Text display for user input or AI thinking/searching */}
+        {(isVoiceLoopActive && (isRecordingUser || isThinkingAI || isSearchingAI)) && (
           <p className="text-2xl font-semibold text-gray-300 text-center mt-8">
             {displayMessage}
           </p>
@@ -85,9 +87,6 @@ const Home: React.FC = () => {
           </Button>
         </div>
       )}
-
-      {/* WakeWordListener is no longer needed here, its functionality is absorbed */}
-      {/* <WakeWordListener onWake={startVoiceLoop} isActive={!isVoiceLoopActive} /> */}
     </div>
   );
 };

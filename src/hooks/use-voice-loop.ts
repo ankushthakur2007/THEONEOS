@@ -12,6 +12,7 @@ interface UseVoiceLoopReturn {
   isRecordingUser: boolean;
   isSpeakingAI: boolean;
   isThinkingAI: boolean;
+  isSearchingAI: boolean; // New state
   currentInterimText: string;
   aiResponseText: string;
   isRecognitionReady: boolean;
@@ -23,7 +24,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const isVoiceLoopActiveRef = useRef(isVoiceLoopActive); // To ensure latest state in async ops
 
   const [isRecordingUser, setIsRecordingUser] = useState(false);
-  const [isThinkingAI, setIsThinkingAI] = useState(false);
+  // isThinkingAI and isSearchingAI will now come from useAIInteraction
   const [currentInterimText, setCurrentInterimText] = useState('');
 
   // Queue for user commands received from continuous listener
@@ -132,6 +133,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   // AI Interaction hook
   const {
     processSpeech,
+    isThinkingAI, // Get isThinkingAI from useAIInteraction
+    isSearchingAI, // Get isSearchingAI from useAIInteraction
   } = useAIInteraction(
     supabase,
     session,
@@ -151,7 +154,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
 
   const resetAllFlags = useCallback(() => {
     setIsRecordingUser(false);
-    setIsThinkingAI(false);
+    // isThinkingAI and isSearchingAI are managed by useAIInteraction
     setCurrentInterimText('');
     // isSpeakingAI and aiResponseText are managed by useTextToSpeech
     csrResetTranscript(); // Reset continuous listener's buffer
@@ -184,7 +187,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
 
       let aiResponse: { text: string; audioUrl: string | null } | null = null;
       try {
-        setIsThinkingAI(true);
+        // isThinkingAI and isSearchingAI are managed internally by processSpeech
         aiResponse = await processSpeech(userText);
       } catch (error: any) {
         console.error("Think phase failed:", error.message);
@@ -192,15 +195,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
         // If AI thinking fails, break the loop
         break;
       } finally {
-        setIsThinkingAI(false);
+        // No need to set isThinkingAI/isSearchingAI here, processSpeech handles it
       }
-
-      // The audio playback is handled by processSpeech (which calls speakAIResponse).
-      // We just need to ensure the loop waits for speaking to finish.
-      // The `isSpeakingAI` state from `useTextToSpeech` will correctly reflect this.
-      // The loop will naturally continue once the `isSpeakingAI` state becomes false.
-      // For now, we don't need an explicit await here, as the while loop condition
-      // and the next `getUserCommand` will implicitly wait.
 
       if (!aiResponse || !aiResponse.text) {
         console.warn("AI response text was empty, skipping speak phase. Returning to idle mode.");
@@ -228,7 +224,6 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     if (isVoiceLoopActiveRef.current) {
       setIsVoiceLoopActive(false);
       isVoiceLoopActiveRef.current = false;
-      // srStopRecognition(); // REMOVED: Continuous listener should remain active
       cancelSpeech();
       // Reject any pending user command promise
       if (rejectUserCommandRef.current) {
@@ -238,7 +233,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       }
       // The continuous listener remains active for wake word detection
     }
-  }, [cancelSpeech]); // Removed srStopRecognition from dependencies
+  }, [cancelSpeech]);
 
   return {
     isVoiceLoopActive,
@@ -246,7 +241,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     stopVoiceLoop,
     isRecordingUser,
     isSpeakingAI,
-    isThinkingAI,
+    isThinkingAI, // Pass through
+    isSearchingAI, // Pass through
     currentInterimText: isVoiceLoopActive ? currentInterimText : csrCurrentInterimTranscript, // Show CSR interim when idle
     aiResponseText,
     isRecognitionReady: csrIsReady,

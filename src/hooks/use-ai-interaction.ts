@@ -10,6 +10,7 @@ interface ChatMessage {
 interface UseAIInteractionReturn {
   processSpeech: (text: string) => Promise<{ text: string; audioUrl: string | null }>;
   isThinkingAI: boolean;
+  isSearchingAI: boolean; // New state
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
@@ -41,10 +42,11 @@ export function useAIInteraction(
   speakAIResponse: (text: string) => Promise<string | null>,
 ): UseAIInteractionReturn {
   const [isThinkingAI, setIsThinkingAI] = useState(false);
+  const [isSearchingAI, setIsSearchingAI] = useState(false); // Initialize new state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const processSpeech = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
-    setIsThinkingAI(true);
+    setIsThinkingAI(true); // General thinking starts
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
@@ -113,8 +115,10 @@ export function useAIInteraction(
         if (parsed.tool === "www.go.io" && parsed.params && parsed.params.query) {
           isToolCall = true;
           toast.info("Searching the internet...");
+          setIsSearchingAI(true); // Set searching state to true
           const searchQuery = parsed.params.query;
           const searchResult = await runSearchTool(searchQuery);
+          setIsSearchingAI(false); // Set searching state to false after search completes
 
           // Second call to Gemini to summarize the search result
           const summarizePromptText = `Summarize this for voice: ${searchResult}`;
@@ -139,6 +143,8 @@ export function useAIInteraction(
         // Not a JSON tool call, or malformed JSON, treat as direct text
         console.log("Gemini response was not a tool call JSON, treating as direct text.");
         isToolCall = false; // Ensure this is false if parsing fails
+      } finally {
+        setIsSearchingAI(false); // Ensure searching state is reset even if parsing fails
       }
 
       if (!isToolCall) {
@@ -175,13 +181,14 @@ export function useAIInteraction(
       setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message on error
       throw error; // Re-throw error for runVoiceLoop to catch
     } finally {
-      setIsThinkingAI(false);
+      setIsThinkingAI(false); // General thinking ends
     }
   }, [supabase, session, speakAIResponse]);
 
   return {
     processSpeech,
     isThinkingAI,
+    isSearchingAI, // Return new state
     messages,
     setMessages,
   };
