@@ -16,11 +16,29 @@ interface UseAIInteractionReturn {
 
 const MAX_HISTORY_MESSAGES = 5;
 
+// Function to run DuckDuckGo search
+async function runSearchTool(query: string): Promise<string> {
+  try {
+    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1`);
+    const json = await res.json();
+
+    return (
+      json.Answer ||
+      json.Abstract ||
+      json.Definition ||
+      json.RelatedTopics?.[0]?.Text ||
+      "I couldn't find anything online."
+    );
+  } catch (e) {
+    console.error("Search error:", e);
+    return "I had trouble accessing the internet.";
+  }
+}
+
 export function useAIInteraction(
   supabase: SupabaseClient,
   session: Session | null,
   speakAIResponse: (text: string) => Promise<string | null>,
-  // Removed onAIInteractionComplete and onAIInteractionError as they are now handled by runVoiceLoop
 ): UseAIInteractionReturn {
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -33,6 +51,7 @@ export function useAIInteraction(
 
     let aiText = '';
     let audioUrl: string | null = null;
+    let finalSpokenText = ''; // The text that will actually be spoken
 
     try {
       let conversationHistory: ChatMessage[] = [];
@@ -58,6 +77,7 @@ export function useAIInteraction(
 
       const fullHistoryForAI = [...conversationHistory, newUserMessage];
 
+      // First call to Gemini
       const geminiResponse = await supabase.functions.invoke('gemini-chat', {
         body: { prompt: text, history: fullHistoryForAI },
       });
@@ -71,14 +91,51 @@ export function useAIInteraction(
       if (!aiText) {
         toast.info("AI returned an empty response.");
         setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
-        throw new Error("AI returned an empty response."); // Propagate error for runVoiceLoop to catch
+        throw new Error("AI returned an empty response.");
       }
 
-      // Speak the AI response and get the audio URL if ElevenLabs was used
-      audioUrl = await speakAIResponse(aiText);
+      let isToolCall = false;
+      try {
+        const parsed = JSON.parse(aiText);
+        if (parsed.tool === "www.go.io" && parsed.params && parsed.params.query) {
+          isToolCall = true;
+          toast.info("Searching the internet...");
+          const searchQuery = parsed.params.query;
+          const searchResult = await runSearchTool(searchQuery);
 
-      // Add AI message to local state after it's spoken (or attempted to speak)
-      const newAIMessage: ChatMessage = { role: 'model', parts: [{ text: aiText }] };
+          // Second call to Gemini to summarize the search result
+          const summarizePromptText = `Summarize this for voice: ${searchResult}`;
+          const historyForSummarization = [
+            ...fullHistoryForAI,
+            { role: 'model', parts: [{ text: aiText }] }, // Include the tool call in history for context
+            { role: 'user', parts: [{ text: summarizePromptText }] } // The prompt for summarization
+          ];
+
+          const summaryResponse = await supabase.functions.invoke('gemini-chat', {
+            body: { prompt: summarizePromptText, history: historyForSummarization },
+          });
+
+          if (summaryResponse.error) {
+            console.error('Error summarizing search result:', summaryResponse.error.message);
+            finalSpokenText = "I found some information, but I had trouble summarizing it.";
+          } else {
+            finalSpokenText = summaryResponse.data.text;
+          }
+        }
+      } catch (parseError) {
+        // Not a JSON tool call, or malformed JSON, treat as direct text
+        console.log("Gemini response was not a tool call JSON, treating as direct text.");
+      }
+
+      if (!isToolCall) {
+        finalSpokenText = aiText; // If not a tool call, the original AI text is the final spoken text
+      }
+
+      // Speak the final determined text
+      audioUrl = await speakAIResponse(finalSpokenText);
+
+      // Add AI message to local state after it's spoken
+      const newAIMessage: ChatMessage = { role: 'model', parts: [{ text: finalSpokenText }] };
       setMessages(prevMessages => [...prevMessages, newAIMessage]);
 
       // Save the new interaction to the database
@@ -86,7 +143,7 @@ export function useAIInteraction(
         const { error: dbError } = await supabase.from('interactions').insert({
           user_id: session.user.id,
           input_text: text,
-          response_text: aiText,
+          response_text: finalSpokenText, // Save the final spoken text
           audio_url: audioUrl,
         });
         if (dbError) {
@@ -96,7 +153,7 @@ export function useAIInteraction(
       }
 
       toast.success("AI response received!");
-      return { text: aiText, audioUrl }; // Return the AI text and audio URL
+      return { text: finalSpokenText, audioUrl }; // Return the AI text and audio URL
 
     } catch (error: any) {
       console.error('Overall error in AI interaction:', error);
