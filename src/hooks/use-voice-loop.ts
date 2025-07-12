@@ -82,10 +82,10 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       try {
         userText = await listen();
       } catch (error: any) {
-        console.warn("Listen phase failed:", error.message);
+        console.warn("Listen phase failed with error:", error.message); // Added detailed log
         if (error.message === "No speech detected.") {
           toast.info("No speech detected. Please try again.");
-        } else if (error.message.includes("not-allowed")) {
+        } else if (error.message.includes("not-allowed") || error.message.includes("Microphone access denied")) {
           toast.error("Microphone access denied. Please enable microphone permissions.");
           setIsVoiceLoopActive(false); // Also stop the loop if permission is denied
           isVoiceLoopActiveRef.current = false; // Ensure ref is updated

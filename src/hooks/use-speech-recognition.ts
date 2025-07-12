@@ -65,6 +65,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     return new Promise(async (resolve, reject) => {
       if (!recognitionRef.current) {
         toast.error("Voice input not ready. Please try again.");
+        console.error("SpeechRecognition: recognitionRef.current is null.");
         return reject(new Error("SpeechRecognition object not initialized."));
       }
 
@@ -72,11 +73,11 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log("Microphone access granted for speech recognition.");
-      } catch (err) {
+      } catch (err: any) {
         console.error("Microphone access denied for speech recognition:", err);
         toast.error("Microphone access denied. Please enable microphone permissions in your browser settings.");
         setIsRecording(false);
-        return reject(new Error("Microphone access denied."));
+        return reject(new Error(`Microphone access denied: ${err.name || err.message}`));
       }
 
       if ((recognitionRef.current as any).recognizing) {
@@ -88,12 +89,13 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       rejectPromiseRef.current = reject;
 
       try {
+        console.log("SpeechRecognition: Attempting to start recognition.");
         recognitionRef.current.start();
         toast.info("Listening...");
         setIsRecording(true);
         finalTranscriptionRef.current = '';
         setCurrentInterimText('');
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error starting speech recognition:", error);
         toast.error("Failed to start voice input.");
         setIsRecording(false);
