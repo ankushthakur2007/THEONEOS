@@ -1,9 +1,9 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
-import { Sparkles, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useVoiceLoop } from '@/hooks/use-voice-loop';
-import { WakeWordListener } from '@/components/WakeWordListener'; // Changed to named import
+import { WakeWordListener } from '@/components/WakeWordListener';
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -16,7 +16,6 @@ const Home: React.FC = () => {
     isThinkingAI,
     currentInterimText,
     aiResponseText,
-    isRecognitionReady,
     audioRef,
   } = useVoiceLoop(supabase, session);
 
@@ -29,28 +28,46 @@ const Home: React.FC = () => {
   } else if (isSpeakingAI) {
     displayMessage = aiResponseText || "AI is speaking...";
   } else {
-    displayMessage = "Tap to speak";
+    displayMessage = "Say 'the one' to activate"; // New idle message
   };
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
       <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4 flex-grow">
-        {isVoiceLoopActive ? (
-          <p className="text-3xl font-semibold text-gray-300 text-center">
+        {/* Conditional rendering for the visual states */}
+        {!isVoiceLoopActive && !isSpeakingAI && (
+          // Initial state: Single large ball
+          <div className="relative w-48 h-48 rounded-full bg-blue-600 flex items-center justify-center animate-pulse">
+            <span className="text-xl font-bold">THEONEOS</span>
+          </div>
+        )}
+
+        {isVoiceLoopActive && !isSpeakingAI && (
+          // Wake word detected / Listening / Thinking state: Three smaller balls
+          <div className="flex space-x-4">
+            <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0s' }}></div>
+            <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+        )}
+
+        {/* Text display for user input or AI thinking */}
+        {(isVoiceLoopActive && (isRecordingUser || isThinkingAI)) && (
+          <p className="text-2xl font-semibold text-gray-300 text-center mt-8">
             {displayMessage}
           </p>
-        ) : (
-          <Button
-            variant="default"
-            size="icon"
-            className="w-32 h-32 rounded-full transition-all duration-300 relative z-10 bg-blue-600 hover:bg-blue-700"
-            onClick={startVoiceLoop}
-            disabled={!isRecognitionReady}
-          >
-            <Sparkles className="h-36 w-36" />
-          </Button>
+        )}
+
+        {/* AI Response Text (highlighted like subtitles) */}
+        {isSpeakingAI && (
+          <div className="text-center mt-8">
+            <p className="text-4xl font-bold text-blue-400 animate-fade-in-up">
+              {aiResponseText}
+            </p>
+          </div>
         )}
       </div>
+
       <audio ref={audioRef} className="hidden" />
 
       {isVoiceLoopActive && (
@@ -66,8 +83,8 @@ const Home: React.FC = () => {
         </div>
       )}
 
-      {/* Render WakeWordListener only when the voice loop is inactive */}
-      {!isVoiceLoopActive && <WakeWordListener onWake={startVoiceLoop} />}
+      {/* WakeWordListener is always active in the background */}
+      <WakeWordListener onWake={startVoiceLoop} />
     </div>
   );
 };
