@@ -95,8 +95,21 @@ export function useAIInteraction(
       }
 
       let isToolCall = false;
+      let cleanedAiText = aiText;
+
+      // Check if the AI response is a JSON markdown block and extract the content
+      const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/;
+      const match = aiText.match(jsonBlockRegex);
+
+      if (match && match[1]) {
+        cleanedAiText = match[1];
+        console.log("Extracted JSON from markdown block.");
+      } else {
+        console.log("No JSON markdown block found, attempting to parse as-is.");
+      }
+
       try {
-        const parsed = JSON.parse(aiText);
+        const parsed = JSON.parse(cleanedAiText);
         if (parsed.tool === "www.go.io" && parsed.params && parsed.params.query) {
           isToolCall = true;
           toast.info("Searching the internet...");
@@ -125,6 +138,7 @@ export function useAIInteraction(
       } catch (parseError) {
         // Not a JSON tool call, or malformed JSON, treat as direct text
         console.log("Gemini response was not a tool call JSON, treating as direct text.");
+        isToolCall = false; // Ensure this is false if parsing fails
       }
 
       if (!isToolCall) {
