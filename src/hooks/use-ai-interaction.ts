@@ -121,7 +121,7 @@ export function useAIInteraction(
         const parsed = JSON.parse(cleanedAiText);
         if (parsed.tool === "www.go.io" && parsed.params && parsed.params.query) {
           isToolCall = true;
-          toast.info("Searching the internet...");
+          toast.info("searching for youuuu babu"); // Added toast here
           setIsSearchingAI(true); // Set searching state to true
 
           const searchQuery = parsed.params.query;
