@@ -64,19 +64,18 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     speakAIResponse,
   );
 
+  // Modified resetAllFlags to only reset state, not stop underlying APIs
   const resetAllFlags = useCallback(() => {
     setIsRecordingUser(false);
     setIsSpeakingAI(false);
     setIsThinkingAI(false);
     setCurrentInterimText('');
     setAiResponseText('');
-    srStopRecognition();
-    cancelSpeech();
-  }, [srStopRecognition, cancelSpeech]);
+  }, []);
 
   const runVoiceLoop = useCallback(async () => {
     while (isVoiceLoopActiveRef.current) {
-      resetAllFlags();
+      resetAllFlags(); // Only resets state variables now
 
       let userText = '';
       try {
@@ -192,7 +191,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
         return;
       }
     }
-    resetAllFlags();
+    resetAllFlags(); // Final reset when loop truly stops
     toast.info("Voice loop stopped.");
   }, [listen, processSpeech, audioRef, resetAllFlags]);
 
@@ -208,8 +207,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     if (isVoiceLoopActiveRef.current) { // Check the ref directly
       setIsVoiceLoopActive(false);
       isVoiceLoopActiveRef.current = false; // Explicitly set the ref to false immediately
-      srStopRecognition();
-      cancelSpeech();
+      srStopRecognition(); // Stop recognition when user explicitly stops
+      cancelSpeech(); // Cancel speech when user explicitly stops
     }
   }, [srStopRecognition, cancelSpeech]);
 
