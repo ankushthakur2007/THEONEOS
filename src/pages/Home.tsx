@@ -53,6 +53,28 @@ const Home: React.FC = () => {
     }
   }, []);
 
+  // Function to reset all relevant state flags and stop ongoing processes
+  const resetAllFlags = useCallback(() => {
+    setIsRecordingUser(false);
+    setIsSpeakingAI(false);
+    setIsThinkingAI(false);
+    setCurrentInterimText('');
+    setAiResponseText('');
+    finalTranscriptionRef.current = '';
+    recognitionRef.current?.stop(); // Ensure recognition is stopped
+    cancelSpeech(); // Ensure any ongoing speech is cancelled
+  }, [cancelSpeech]);
+
+  // Function to force the loop to continue (resets state, then main useEffect restarts recognition)
+  const forceContinueLoop = useCallback(() => {
+    if (isVoiceLoopActiveRef.current) {
+      resetAllFlags();
+      // The main useEffect will pick up the state change and restart recognition
+    } else {
+      resetAllFlags(); // If loop is not active, just reset flags
+    }
+  }, [resetAllFlags]);
+
   // Function to start speech recognition
   const startRecognition = useCallback(() => {
     if (!recognitionRef.current) {
@@ -63,7 +85,6 @@ const Home: React.FC = () => {
     }
 
     // Explicitly stop any ongoing recognition before attempting to start a new one
-    // This is crucial for preventing InvalidStateError
     if (recognitionRef.current.recognizing || (recognitionRef.current as any).readyState === SpeechRecognition.State.ACTIVE) {
       recognitionRef.current.stop();
       console.log("SpeechRecognition: Forced stop before new start.");
@@ -98,37 +119,36 @@ const Home: React.FC = () => {
       }).catch(e => {
         console.error("Error attempting to play ElevenLabs audio:", e);
         toast.error(`Audio playback failed: ${e.message}.`);
-        setIsSpeakingAI(false); // Set speaking to false on error
+        resetAllFlags(); // Reset flags on playback error
+        setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
       });
 
       audioRef.current.onended = () => {
         console.log("ElevenLabs Audio: Playback ended.");
-        setIsSpeakingAI(false); // Set speaking to false when done
-        setAiResponseText('');
+        resetAllFlags(); // Reset flags when done
       };
 
       audioRef.current.onerror = () => {
         console.error("ElevenLabs Audio: Playback error event.");
         toast.error("Audio playback error.");
-        setIsSpeakingAI(false); // Set speaking to false on error
-        setAiResponseText('');
+        resetAllFlags(); // Reset flags on error
+        setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
       };
     }
-  }, []);
+  }, [resetAllFlags, forceContinueLoop]);
 
   // Function to speak using Web Speech API (fallback)
   const speakWithWebSpeechAPI = useCallback((text: string) => {
     if (!('speechSynthesis' in window)) {
       console.warn("Web Speech API: Not supported.");
       toast.error("Browser does not support Web Speech API for text-to-speech.");
-      setIsSpeakingAI(false);
-      setAiResponseText('');
+      resetAllFlags(); // Reset flags if not supported
+      setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
       return;
     }
 
-    const resetSpeechState = () => {
-      setIsSpeakingAI(false);
-      setAiResponseText('');
+    const resetAndAllowLoopRestart = () => {
+      resetAllFlags();
       if (speechTimeoutIdRef.current) {
         clearTimeout(speechTimeoutIdRef.current);
         speechTimeoutIdRef.current = null;
@@ -153,24 +173,25 @@ const Home: React.FC = () => {
       speechTimeoutIdRef.current = setTimeout(() => {
         console.warn("Web Speech API: Speech timeout reached, forcing restart of recognition.");
         window.speechSynthesis.cancel(); // Attempt to stop any stuck speech
-        resetSpeechState();
+        resetAndAllowLoopRestart();
       }, SPEECH_TIMEOUT_MS);
     };
 
     utterance.onend = () => {
       console.log("Web Speech API: Speech ended.");
-      resetSpeechState();
+      resetAndAllowLoopRestart();
     };
 
     utterance.onerror = (event) => {
       console.error('Web Speech API error:', event.error);
       toast.error("Browser speech synthesis failed.");
-      resetSpeechState();
+      resetAndAllowLoopRestart();
+      setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
     };
 
     console.log("Web Speech API: Attempting to speak full text.");
     window.speechSynthesis.speak(utterance);
-  }, []);
+  }, [resetAllFlags, forceContinueLoop]);
 
   // Function to handle transcription completion and AI interaction
   const processUserSpeech = useCallback(async (text: string) => {
@@ -228,6 +249,7 @@ const Home: React.FC = () => {
         setIsThinkingAI(false);
         toast.info("AI returned an empty response.");
         setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message
+        setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
         return;
       }
 
@@ -240,8 +262,9 @@ const Home: React.FC = () => {
           body: { text: aiText },
         });
 
-        if (elevenLabsResponse.error || !elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || !elevenLabsResponse.data.audioUrl) {
-          console.warn('ElevenLabs TTS failed, attempting fallback to Web Speech API:', elevenLabsResponse.error?.message || 'Invalid data');
+        // Improved ElevenLabs Guard
+        if (elevenLabsResponse.error || !elevenLabsResponse.data || typeof elevenLabsResponse.data !== 'object' || typeof elevenLabsResponse.data.audioUrl !== 'string' || !elevenLabsResponse.data.audioUrl) {
+          console.warn('ElevenLabs TTS failed or no valid audio URL received, attempting fallback to Web Speech API:', elevenLabsResponse.error?.message || 'Invalid data or no audio URL');
           speakWithWebSpeechAPI(aiText);
           ttsAttempted = true;
           toast.info("ElevenLabs failed, using browser's voice.");
@@ -282,12 +305,10 @@ const Home: React.FC = () => {
     } catch (error: any) {
       console.error('Overall error in AI interaction:', error);
       toast.error(`Failed to get AI response: ${error.message}.`);
-      setIsSpeakingAI(false); // Ensure speaking state is reset
-      setIsThinkingAI(false); // Ensure thinking state is reset
-      setAiResponseText('');
-      setMessages(prevMessages => prevMessages.slice(0, -1)); // Remove optimistic user message on error
+      resetAllFlags(); // Reset flags on overall error
+      setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
     }
-  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, messages]);
+  }, [supabase, session, playAudioAndThenListen, speakWithWebSpeechAPI, setCurrentInterimText, setAiResponseText, messages, resetAllFlags, forceContinueLoop]);
 
   // Stable SpeechRecognition event handlers
   const handleRecognitionResult = useCallback((event: SpeechRecognitionEvent) => {
@@ -308,19 +329,16 @@ const Home: React.FC = () => {
 
   const handleRecognitionError = useCallback((event: SpeechRecognitionErrorEvent) => {
     console.error('Speech recognition error:', event.error);
-    setIsRecordingUser(false);
-    finalTranscriptionRef.current = '';
-    setCurrentInterimText('');
-    setAiResponseText('');
+    resetAllFlags(); // Reset flags on recognition error
 
     if (event.error === 'not-allowed') {
       toast.error("Microphone access denied. Please enable microphone permissions.");
       setIsVoiceLoopActive(false); // Critical error, stop loop
     } else {
       toast.info(`Speech recognition error: ${event.error}. Please check your microphone and speak clearly.`);
-      // The main useEffect will handle restarting recognition if the loop is active
+      setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
     }
-  }, []);
+  }, [resetAllFlags, forceContinueLoop]);
 
   const handleRecognitionEnd = useCallback(() => {
     console.log("Speech recognition session ended.");
@@ -330,11 +348,11 @@ const Home: React.FC = () => {
       processUserSpeech(finalTranscribedText);
     } else {
       toast.info("No speech detected. Please check your microphone and speak clearly.");
-      setCurrentInterimText('');
-      // The main useEffect will handle restarting recognition if the loop is active
+      resetAllFlags(); // Reset flags if no speech detected
+      setTimeout(() => forceContinueLoop(), 1000); // Force loop continuation
     }
     finalTranscriptionRef.current = '';
-  }, [processUserSpeech]);
+  }, [processUserSpeech, resetAllFlags, forceContinueLoop]);
 
   // Initialize Speech Recognition (this useEffect should only run once for setup)
   useEffect(() => {
@@ -400,15 +418,28 @@ const Home: React.FC = () => {
       startRecognition();
     } else if (!isVoiceLoopActive) {
       // If voice loop is explicitly stopped, ensure everything is reset
-      recognitionRef.current?.stop();
-      setIsRecordingUser(false);
-      setIsSpeakingAI(false);
-      setIsThinkingAI(false);
-      setCurrentInterimText('');
-      setAiResponseText('');
-      cancelSpeech(); // Ensure any ongoing speech is cancelled
+      resetAllFlags(); // Use the centralized reset function
     }
-  }, [isVoiceLoopActive, isRecognitionReady, isRecordingUser, isSpeakingAI, isThinkingAI, startRecognition, cancelSpeech]);
+  }, [isVoiceLoopActive, isRecognitionReady, isRecordingUser, isSpeakingAI, isThinkingAI, startRecognition, resetAllFlags]);
+
+  // Master Loop Watchdog
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (
+        isVoiceLoopActiveRef.current &&
+        isRecognitionReady && // Only check if recognition is ready
+        !isRecordingUser &&
+        !isThinkingAI &&
+        !isSpeakingAI
+      ) {
+        console.log("Watchdog: Restarting recognition loop.");
+        startRecognition();
+      }
+    }, 8000); // check every 8 seconds
+
+    return () => clearInterval(interval);
+  }, [isRecognitionReady, isRecordingUser, isThinkingAI, isSpeakingAI, startRecognition]);
+
 
   // Function to start the voice loop
   const handleStartVoiceLoop = () => {
@@ -434,7 +465,7 @@ const Home: React.FC = () => {
     displayMessage = aiResponseText || "AI is speaking...";
   } else {
     displayMessage = "Tap to speak";
-  }; // Added semicolon here
+  };
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
