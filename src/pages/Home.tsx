@@ -434,7 +434,7 @@ const Home: React.FC = () => {
     displayMessage = aiResponseText || "AI is speaking...";
   } else {
     displayMessage = "Tap to speak";
-  }
+  }; // Added semicolon here
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
