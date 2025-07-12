@@ -28,7 +28,7 @@ const Home: React.FC = () => {
   } else if (isSpeakingAI) {
     displayMessage = aiResponseText || "AI is speaking...";
   } else {
-    displayMessage = "Say 'the one' to activate"; // New idle message
+    displayMessage = "Say 'jarvis' to activate"; // Updated idle message
   };
 
   return (

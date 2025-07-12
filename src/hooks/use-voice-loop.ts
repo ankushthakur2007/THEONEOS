@@ -82,22 +82,28 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       try {
         userText = await listen();
       } catch (error: any) {
-        console.warn("Listen phase failed with error:", error.message); // Added detailed log
+        console.warn("Listen phase failed with error:", error.message);
         if (error.message === "No speech detected.") {
-          toast.info("No speech detected. Please try again.");
+          toast.info("No speech detected. Returning to idle mode.");
+          setIsVoiceLoopActive(false); // Stop the loop
+          isVoiceLoopActiveRef.current = false; // Update ref
+          return; // Exit runVoiceLoop, effectively stopping the loop
         } else if (error.message.includes("not-allowed") || error.message.includes("Microphone access denied")) {
           toast.error("Microphone access denied. Please enable microphone permissions.");
-          setIsVoiceLoopActive(false); // Also stop the loop if permission is denied
-          isVoiceLoopActiveRef.current = false; // Ensure ref is updated
-          return; // Exit the loop
+          setIsVoiceLoopActive(false);
+          isVoiceLoopActiveRef.current = false;
+          return; // Exit the loop entirely
         } else if (error.message.includes("Speech recognition stopped by user.")) {
           console.log("Listen phase stopped by user.");
           break; // Exit the loop gracefully
         }
         else {
           toast.error(`Listening error: ${error.message}`);
+          // For other errors, also stop the loop to prevent continuous issues
+          setIsVoiceLoopActive(false);
+          isVoiceLoopActiveRef.current = false;
+          return;
         }
-        continue; // Continue to the next iteration of the while loop
       }
 
       let aiResponse: { text: string; audioUrl: string | null } | null = null;
@@ -108,7 +114,10 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
         console.error("Think phase failed:", error.message);
         toast.error(`AI thinking error: ${error.message}`);
         setIsThinkingAI(false);
-        continue;
+        // If AI thinking fails, stop the loop and return to idle
+        setIsVoiceLoopActive(false);
+        isVoiceLoopActiveRef.current = false;
+        return;
       }
 
       setIsThinkingAI(false);
@@ -171,11 +180,16 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
           console.error("Speak phase failed:", error.message);
           toast.error(`AI speaking error: ${error.message}`);
           setIsSpeakingAI(false);
-          continue;
+          // If AI speaking fails, stop the loop and return to idle
+          setIsVoiceLoopActive(false);
+          isVoiceLoopActiveRef.current = false;
+          return;
         }
       } else {
-        console.warn("AI response text was empty, skipping speak phase.");
-        continue;
+        console.warn("AI response text was empty, skipping speak phase. Returning to idle mode.");
+        setIsVoiceLoopActive(false);
+        isVoiceLoopActiveRef.current = false;
+        return;
       }
     }
     resetAllFlags();
