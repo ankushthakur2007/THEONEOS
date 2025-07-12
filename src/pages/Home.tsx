@@ -83,8 +83,8 @@ const Home: React.FC = () => {
         </div>
       )}
 
-      {/* WakeWordListener is always active in the background */}
-      <WakeWordListener onWake={startVoiceLoop} />
+      {/* WakeWordListener is active only when the main voice loop is NOT active */}
+      <WakeWordListener onWake={startVoiceLoop} isActive={!isVoiceLoopActive} />
     </div>
   );
 };
