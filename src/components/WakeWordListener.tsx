@@ -33,7 +33,7 @@ export function WakeWordListener({ onWake }: WakeWordListenerProps) {
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
       console.log("WakeWordListener: Heard:", transcript);
-      if (transcript.includes("the one")) {
+      if (transcript.includes("jarvis")) { // Changed wake word to "jarvis"
         console.log("WakeWordListener: Wake word detected! 🎙️");
         recognition.stop();
         onWake();
@@ -101,7 +101,7 @@ export function WakeWordListener({ onWake }: WakeWordListenerProps) {
         console.log("WakeWordListener: Component unmounted, recognition stopped.");
       }
     };
-  }, [onWake, micPermissionGranted]); // Add micPermissionGranted to dependencies
+  }, [onWake, micPermissionGranted]);
 
   return null;
 }
