@@ -28,6 +28,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const [currentInterimText, setCurrentInterimText] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
 
+  // Keep the ref in sync with the state for external checks, but for internal loop control,
+  // we'll update the ref directly in start/stop functions.
   useEffect(() => {
     isVoiceLoopActiveRef.current = isVoiceLoopActive;
   }, [isVoiceLoopActive]);
@@ -85,16 +87,17 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
           toast.info("No speech detected. Please try again.");
         } else if (error.message.includes("not-allowed")) {
           toast.error("Microphone access denied. Please enable microphone permissions.");
-          setIsVoiceLoopActive(false);
-          return;
+          setIsVoiceLoopActive(false); // Also stop the loop if permission is denied
+          isVoiceLoopActiveRef.current = false; // Ensure ref is updated
+          return; // Exit the loop
         } else if (error.message.includes("Speech recognition stopped by user.")) {
           console.log("Listen phase stopped by user.");
-          break;
+          break; // Exit the loop gracefully
         }
         else {
           toast.error(`Listening error: ${error.message}`);
         }
-        continue;
+        continue; // Continue to the next iteration of the while loop
       }
 
       let aiResponse: { text: string; audioUrl: string | null } | null = null;
@@ -180,19 +183,21 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   }, [listen, processSpeech, audioRef, resetAllFlags]);
 
   const startVoiceLoop = useCallback(() => {
-    if (!isVoiceLoopActive) {
+    if (!isVoiceLoopActiveRef.current) { // Check the ref directly
       setIsVoiceLoopActive(true);
+      isVoiceLoopActiveRef.current = true; // Explicitly set the ref to true immediately
       runVoiceLoop();
     }
-  }, [isVoiceLoopActive, runVoiceLoop]);
+  }, [runVoiceLoop]);
 
   const stopVoiceLoop = useCallback(() => {
-    if (isVoiceLoopActive) {
+    if (isVoiceLoopActiveRef.current) { // Check the ref directly
       setIsVoiceLoopActive(false);
+      isVoiceLoopActiveRef.current = false; // Explicitly set the ref to false immediately
       srStopRecognition();
       cancelSpeech();
     }
-  }, [isVoiceLoopActive, srStopRecognition, cancelSpeech]);
+  }, [srStopRecognition, cancelSpeech]);
 
   return {
     isVoiceLoopActive,
