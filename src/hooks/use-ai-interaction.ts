@@ -17,23 +17,28 @@ interface UseAIInteractionReturn {
 
 const MAX_HISTORY_MESSAGES = 5;
 
-// Function to run DuckDuckGo search
-async function runSearchTool(query: string): Promise<string> {
-  console.log("Attempting search for query:", query); // Log the query
+// Function to run search using the Supabase Edge Function for Serper.dev
+async function runSearchTool(supabase: SupabaseClient, query: string): Promise<string> {
+  console.log("Attempting search for query via Serper Edge Function:", query);
   try {
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1`);
-    const json = await res.json();
-    console.log("DuckDuckGo API response:", json); // Log the full JSON response
+    const { data, error } = await supabase.functions.invoke('searchWithSerper', {
+      body: { query },
+    });
 
-    return (
-      json.Answer ||
-      json.Abstract ||
-      json.Definition ||
-      json.RelatedTopics?.[0]?.Text ||
-      `I couldn't find a direct answer for "${query}" online.` // More specific fallback
-    );
-  } catch (e) {
-    console.error("Search error:", e);
+    if (error) {
+      console.error('Serper Edge Function error:', error.message);
+      throw new Error(`Search failed: ${error.message}`);
+    }
+
+    if (!data || typeof data.result !== 'string') {
+      console.warn('Serper Edge Function returned invalid data:', data);
+      return "I couldn't find anything helpful online.";
+    }
+
+    console.log("Serper.dev search result:", data.result);
+    return data.result;
+  } catch (e: any) {
+    console.error("Search tool invocation error:", e);
     return "I had trouble accessing the internet.";
   }
 }
@@ -118,8 +123,10 @@ export function useAIInteraction(
           isToolCall = true;
           toast.info("Searching the internet...");
           setIsSearchingAI(true); // Set searching state to true
+
           const searchQuery = parsed.params.query;
-          const searchResult = await runSearchTool(searchQuery);
+          const searchResult = await runSearchTool(supabase, searchQuery); // Pass supabase client
+
           setIsSearchingAI(false); // Set searching state to false after search completes
 
           // Second call to Gemini to summarize the search result

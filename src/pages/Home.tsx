@@ -29,7 +29,7 @@ const Home: React.FC = () => {
   } else if (isSpeakingAI) {
     displayMessage = aiResponseText || "AI is speaking...";
   } else if (isSearchingAI) { // Prioritize searching message
-    displayMessage = "Searching...";
+    displayMessage = "searching for youuuu babu"; // Updated message
   } else if (isThinkingAI) {
     displayMessage = "Thinking...";
   } else {
