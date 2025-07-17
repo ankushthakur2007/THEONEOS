@@ -25,7 +25,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
 
   const [isRecordingUser, setIsRecordingUser] = useState(false);
   // isThinkingAI and isSearchingAI will now come from useAIInteraction
-  const [currentInterimText, setCurrentInterimText] = useState('');
+  const [currentInterimText, setCurrentInterimTranscript] = useState('');
 
   // Queue for user commands received from continuous listener
   const userCommandQueueRef = useRef<string[]>([]);
@@ -86,7 +86,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     useCallback((interimTranscript) => {
       // Update interim text for display
       if (isVoiceLoopActiveRef.current) { // Only show interim if main loop is active
-        setCurrentInterimText(interimTranscript);
+        setCurrentInterimTranscript(interimTranscript);
       }
     }, []),
     useCallback((error) => {
@@ -155,7 +155,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const resetAllFlags = useCallback(() => {
     setIsRecordingUser(false);
     // isThinkingAI and isSearchingAI are managed by useAIInteraction
-    setCurrentInterimText('');
+    setCurrentInterimTranscript('');
     // isSpeakingAI and aiResponseText are managed by useTextToSpeech
     csrResetTranscript(); // Reset continuous listener's buffer
   }, [csrResetTranscript]);
@@ -189,6 +189,13 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       try {
         // isThinkingAI and isSearchingAI are managed internally by processSpeech
         aiResponse = await processSpeech(userText);
+
+        // Check if the AI response text is empty immediately after receiving it
+        if (!aiResponse || !aiResponse.text) {
+          // Throw an error if the AI returned an empty response
+          throw new Error("AI returned an empty response.");
+        }
+
       } catch (error: any) {
         console.error("Think phase failed:", error.message);
         toast.error(`AI thinking error: ${error.message}`);
@@ -198,10 +205,10 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
         // No need to set isThinkingAI/isSearchingAI here, processSpeech handles it
       }
 
-      if (!aiResponse || !aiResponse.text) {
-        console.warn("AI response text was empty, skipping speak phase. Returning to idle mode.");
-        break;
-      }
+      // The check for empty response is now inside the try block,
+      // so this part of the code will only be reached if aiResponse.text is not empty.
+      // You can now proceed with the speak phase.
+      // No need for the `if (!aiResponse || !aiResponse.text)` check here anymore.
     }
     // When the loop breaks, ensure it transitions back to idle state
     setIsVoiceLoopActive(false);
