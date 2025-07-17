@@ -74,8 +74,8 @@ export function useAIInteraction(
         } else if (pastInteractions) {
           // Convert fetched interactions into ChatMessage format and reverse to be chronological
           const loadedMessages: ChatMessage[] = pastInteractions.flatMap(interaction => [
-            { role: 'user', parts: [{ text: interaction.input_text }] },
-            { role: 'model', parts: [{ text: interaction.response_text }] },
+            { role: 'user' as const, parts: [{ text: interaction.input_text }] },
+            { role: 'model' as const, parts: [{ text: interaction.response_text }] },
           ]).reverse(); // Ensure chronological order for history
 
           // Slice to ensure it doesn't exceed MAX_HISTORY_MESSAGES if, for example, MAX_HISTORY_MESSAGES is odd
@@ -147,7 +147,7 @@ export function useAIInteraction(
           const historyForSummarization = [
             ...historyForGemini, // Previous completed turns
             newUserMessage, // The current user's prompt
-            { role: 'model', parts: [{ text: aiText }] }, // The AI's tool call response
+            { role: 'model' as const, parts: [{ text: aiText }] }, // The AI's tool call response
           ];
 
           const summarizePromptText = `Summarize this for voice: ${searchResult}`;
@@ -179,7 +179,7 @@ export function useAIInteraction(
 
       // Add both user and AI messages to local state *after* successful interaction
       setMessages(prevMessages => {
-        const updatedMessages = [...prevMessages, newUserMessage, { role: 'model', parts: [{ text: finalSpokenText }] }];
+        const updatedMessages = [...prevMessages, newUserMessage, { role: 'model' as const, parts: [{ text: finalSpokenText }] }];
         // Keep history limited to MAX_HISTORY_MESSAGES
         return updatedMessages.slice(Math.max(updatedMessages.length - MAX_HISTORY_MESSAGES, 0));
       });
