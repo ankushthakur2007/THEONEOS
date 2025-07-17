@@ -15,7 +15,7 @@ interface UseAIInteractionReturn {
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
 
-const MAX_HISTORY_MESSAGES = 5;
+const MAX_HISTORY_MESSAGES = 10; // Changed to 10 to store 5 full conversational turns (user + model)
 const LOCAL_STORAGE_KEY = 'jarvis_chat_history'; // Key for localStorage
 
 // Function to run search using the Supabase Edge Function for Serper.dev
