@@ -37,14 +37,12 @@ const Home: React.FC = () => {
         </Button>
       </header>
 
-      <main className="flex-grow flex flex-col items-center justify-center text-center p-4">
-        <div className="flex-grow flex items-center justify-center">
-          <JarvisSphere
-            isRecordingUser={isRecordingUser}
-            isThinking={isThinking}
-            isSpeaking={isSpeakingAI}
-          />
-        </div>
+      <main className="flex-grow flex flex-col items-center justify-center text-center p-4 space-y-8">
+        <JarvisSphere
+          isRecordingUser={isRecordingUser}
+          isThinking={isThinking}
+          isSpeaking={isSpeakingAI}
+        />
 
         <div className="h-24 w-full max-w-3xl flex items-center justify-center">
           <p className={cn(
