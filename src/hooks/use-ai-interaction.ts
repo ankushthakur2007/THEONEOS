@@ -8,17 +8,16 @@ interface ChatMessage {
 }
 
 interface UseAIInteractionReturn {
-  processSpeech: (text: string) => Promise<{ text: string; audioUrl: string | null }>;
+  processUserInput: (text: string) => Promise<{ text: string; audioUrl: string | null }>;
   isThinkingAI: boolean;
   isSearchingAI: boolean;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
 
-const MAX_HISTORY_MESSAGES = 10; // Changed to 10 to store 5 full conversational turns (user + model)
-const LOCAL_STORAGE_KEY = 'jarvis_chat_history'; // Key for localStorage
+const MAX_HISTORY_MESSAGES = 10;
+const LOCAL_STORAGE_KEY = 'jarvis_chat_history';
 
-// Function to run search using the Supabase Edge Function for Serper.dev
 async function runSearchTool(supabase: SupabaseClient, query: string): Promise<string> {
   console.log("Attempting search for query via Serper Edge Function:", query);
   try {
@@ -54,7 +53,6 @@ export function useAIInteraction(
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const isInitialLoad = useRef(true);
 
-  // Load initial conversation history from localStorage or Supabase on component mount
   useEffect(() => {
     const loadHistory = async () => {
       if (!session?.user?.id || !isInitialLoad.current) return;
@@ -64,7 +62,6 @@ export function useAIInteraction(
         const storedHistory = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (storedHistory) {
           const parsedHistory: ChatMessage[] = JSON.parse(storedHistory);
-          // Basic validation to ensure it's an array of objects with expected properties
           if (Array.isArray(parsedHistory) && parsedHistory.every(msg => 
             (msg.role === 'user' || msg.role === 'model') && 
             Array.isArray(msg.parts) && 
@@ -80,18 +77,17 @@ export function useAIInteraction(
         }
       } catch (e) {
         console.error("Error parsing localStorage history:", e);
-        localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupted data
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
       }
 
       if (!loadedFromLocalStorage) {
         try {
-          // Fetch up to MAX_HISTORY_MESSAGES / 2 *interactions* (each interaction is 2 messages)
           const { data: pastInteractions, error: fetchError } = await supabase
             .from('interactions')
             .select('input_text, response_text')
             .eq('user_id', session.user.id)
-            .order('timestamp', { ascending: false }) // Get most recent first
-            .limit(Math.ceil(MAX_HISTORY_MESSAGES / 2)); // Ensure we get enough pairs
+            .order('timestamp', { ascending: false })
+            .limit(Math.ceil(MAX_HISTORY_MESSAGES / 2));
 
           if (fetchError) {
             console.error('Error fetching past interactions:', fetchError.message);
@@ -100,7 +96,7 @@ export function useAIInteraction(
             const loadedMessages: ChatMessage[] = pastInteractions.flatMap(interaction => [
               { role: 'user' as const, parts: [{ text: interaction.input_text }] },
               { role: 'model' as const, parts: [{ text: interaction.response_text }] },
-            ]).reverse(); // Ensure chronological order for history
+            ]).reverse();
 
             setMessages(loadedMessages.slice(Math.max(loadedMessages.length - MAX_HISTORY_MESSAGES, 0)));
             console.log("Loaded chat history from Supabase.");
@@ -109,25 +105,26 @@ export function useAIInteraction(
           isInitialLoad.current = false;
         }
       } else {
-        isInitialLoad.current = false; // Mark as loaded even if from localStorage
+        isInitialLoad.current = false;
       }
     };
 
     loadHistory();
   }, [session?.user?.id, supabase]);
 
-  const processSpeech = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
+  const processUserInput = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
     setIsThinkingAI(true);
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
+    setMessages(prevMessages => [...prevMessages, newUserMessage]);
+
     let aiText = '';
     let audioUrl: string | null = null;
     let finalSpokenText = '';
 
     try {
-      const historyForGemini = messages; // Use the current state for history
+      const historyForGemini = messages;
 
-      // First call to Gemini
       const geminiResponse = await supabase.functions.invoke('gemini-chat', {
         body: { prompt: text, history: historyForGemini },
       });
@@ -150,16 +147,13 @@ export function useAIInteraction(
 
       if (match && match[1]) {
         cleanedAiText = match[1];
-        console.log("Extracted JSON from markdown block.");
-      } else {
-        console.log("No JSON markdown block found, attempting to parse as-is.");
       }
 
       try {
         const parsed = JSON.parse(cleanedAiText);
         if (parsed.tool === "www.go.io" && parsed.params && parsed.params.query) {
           isToolCall = true;
-          toast.info("searching for youuuu babu");
+          toast.info("Searching the web...");
           setIsSearchingAI(true);
 
           const searchQuery = parsed.params.query;
@@ -167,11 +161,10 @@ export function useAIInteraction(
 
           setIsSearchingAI(false);
 
-          // Second call to Gemini to summarize the search result
           const historyForSummarization = [
-            ...historyForGemini, // Previous completed turns
-            newUserMessage, // The current user's prompt
-            { role: 'model' as const, parts: [{ text: aiText }] }, // The AI's tool call response
+            ...historyForGemini,
+            newUserMessage,
+            { role: 'model' as const, parts: [{ text: aiText }] },
           ];
 
           const summarizePromptText = `Summarize this for voice: ${searchResult}`;
@@ -188,7 +181,6 @@ export function useAIInteraction(
           }
         }
       } catch (parseError) {
-        console.log("Gemini response was not a tool call JSON, treating as direct text.");
         isToolCall = false;
       } finally {
         setIsSearchingAI(false);
@@ -198,20 +190,15 @@ export function useAIInteraction(
         finalSpokenText = aiText;
       }
 
-      // Speak the final determined text
       audioUrl = await speakAIResponse(finalSpokenText);
 
-      // Add both user and AI messages to local state *after* successful interaction
       setMessages(prevMessages => {
-        const updatedMessages = [...prevMessages, newUserMessage, { role: 'model' as const, parts: [{ text: finalSpokenText }] }];
+        const updatedMessages = [...prevMessages.slice(0, -1), newUserMessage, { role: 'model' as const, parts: [{ text: finalSpokenText }] }];
         const slicedMessages = updatedMessages.slice(Math.max(updatedMessages.length - MAX_HISTORY_MESSAGES, 0));
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slicedMessages)); // Save to localStorage
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slicedMessages));
         return slicedMessages;
       });
 
-      toast.success("AI response received!");
-
-      // Save the new interaction to the database
       if (session?.user?.id) {
         const { error: dbError } = await supabase.from('interactions').insert({
           user_id: session.user.id,
@@ -229,15 +216,17 @@ export function useAIInteraction(
 
     } catch (error: any) {
       console.error('Overall error in AI interaction:', error);
-      toast.error(`Failed to get AI response: ${error.message}.`);
+      const errorMessage = `Failed to get AI response: ${error.message}.`;
+      toast.error(errorMessage);
+      setMessages(prev => [...prev.slice(0, -1), { role: 'model', parts: [{ text: `Sorry, an error occurred: ${error.message}` }] }]);
       throw error;
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, speakAIResponse, messages]); // `messages` is a dependency now
+  }, [supabase, session, speakAIResponse, messages]);
 
   return {
-    processSpeech,
+    processUserInput,
     isThinkingAI,
     isSearchingAI,
     messages,

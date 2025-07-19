@@ -1,8 +1,10 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
 import { useSession } from '@/components/SessionContextProvider';
-import { X } from 'lucide-react';
 import { useVoiceLoop } from '@/hooks/use-voice-loop';
+import { ChatHistory } from '@/components/ChatHistory';
+import { ChatInput } from '@/components/ChatInput';
+import { Button } from '@/components/ui/button';
+import { LogOut } from 'lucide-react';
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
@@ -10,83 +12,44 @@ const Home: React.FC = () => {
     isVoiceLoopActive,
     startVoiceLoop,
     stopVoiceLoop,
-    isRecordingUser,
-    isSpeakingAI,
     isThinkingAI,
-    isSearchingAI, // New state
-    currentInterimText,
-    aiResponseText,
+    isSearchingAI,
     audioRef,
-    isRecognitionReady,
+    processUserInput,
+    messages,
   } = useVoiceLoop(supabase, session);
 
-  // Determine the main status text to display
-  let displayMessage: string;
-  if (!isRecognitionReady) {
-    displayMessage = "Initializing voice input...";
-  } else if (isRecordingUser) {
-    displayMessage = currentInterimText || "Listening...";
-  } else if (isSpeakingAI) {
-    displayMessage = aiResponseText || "AI is speaking...";
-  } else if (isSearchingAI) { // Prioritize searching message
-    displayMessage = "searching for youuuu babu"; // Updated message
-  } else if (isThinkingAI) {
-    displayMessage = "Thinking...";
-  } else {
-    displayMessage = "Say 'jarvis' to activate";
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
   };
 
+  const handleSendMessage = async (message: string) => {
+    if (message) {
+      await processUserInput(message);
+    }
+  };
+
+  const isThinking = isThinkingAI || isSearchingAI;
+
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-4">
-      <div className="flex flex-col items-center justify-center w-full max-w-3xl px-4 flex-grow">
-        {/* Conditional rendering for the visual states */}
-        {!isVoiceLoopActive && !isSpeakingAI && (
-          // Initial state: Single large ball
-          <div className="relative w-48 h-48 rounded-full bg-blue-600 flex items-center justify-center animate-pulse">
-            <span className="text-xl font-bold">THEONEOS</span>
-          </div>
-        )}
-
-        {/* Jiggling balls for active voice loop (listening, thinking, searching) */}
-        {isVoiceLoopActive && !isSpeakingAI && (isRecordingUser || isThinkingAI || isSearchingAI) && (
-          <div className="flex space-x-4">
-            <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0s' }}></div>
-            <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0.2s' }}></div>
-            <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center animate-bounce-slow" style={{ animationDelay: '0.4s' }}></div>
-          </div>
-        )}
-
-        {/* Text display for user input or AI thinking/searching */}
-        {(isVoiceLoopActive && (isRecordingUser || isThinkingAI || isSearchingAI)) && (
-          <p className="text-2xl font-semibold text-gray-300 text-center mt-8">
-            {displayMessage}
-          </p>
-        )}
-
-        {/* AI Response Text (highlighted like subtitles) */}
-        {isSpeakingAI && (
-          <div className="text-center mt-8">
-            <p className="text-4xl font-bold text-blue-400 animate-fade-in-up">
-              {aiResponseText}
-            </p>
-          </div>
-        )}
-      </div>
-
+    <div className="flex flex-col h-screen bg-background">
+      <header className="p-4 border-b flex justify-between items-center">
+        <h1 className="text-xl font-bold">Jarvis</h1>
+        <Button variant="ghost" size="icon" onClick={handleSignOut}>
+          <LogOut className="h-5 w-5" />
+        </Button>
+      </header>
+      <main className="flex-grow flex flex-col overflow-hidden">
+        <ChatHistory messages={messages} isThinking={isThinking} />
+        <ChatInput
+          onSendMessage={handleSendMessage}
+          isVoiceLoopActive={isVoiceLoopActive}
+          startVoiceLoop={startVoiceLoop}
+          stopVoiceLoop={stopVoiceLoop}
+          isThinking={isThinking}
+        />
+      </main>
       <audio ref={audioRef} className="hidden" />
-
-      {isVoiceLoopActive && (
-        <div className="absolute bottom-8">
-          <Button
-            variant="destructive"
-            size="icon"
-            className="w-16 h-16 rounded-full"
-            onClick={stopVoiceLoop}
-          >
-            <X className="h-8 w-8" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 };
