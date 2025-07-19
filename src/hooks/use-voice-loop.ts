@@ -21,7 +21,6 @@ interface UseVoiceLoopReturn {
   currentInterimText: string;
   aiResponseText: string;
   isRecognitionReady: boolean;
-  audioRef: React.RefObject<HTMLAudioElement>;
   processUserInput: (text: string) => Promise<{ text: string; audioUrl: string | null }>;
   messages: ChatMessage[];
 }
@@ -41,9 +40,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     speakAIResponse,
     isSpeakingAI,
     aiResponseText,
-    audioRef,
     cancelSpeech,
-  } = useTextToSpeech(supabase);
+  } = useTextToSpeech();
 
   const {
     processUserInput,
@@ -216,7 +214,6 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     currentInterimText: isVoiceLoopActive ? currentInterimText : csrCurrentInterimTranscript,
     aiResponseText,
     isRecognitionReady: csrIsReady,
-    audioRef,
     processUserInput,
     messages,
   };

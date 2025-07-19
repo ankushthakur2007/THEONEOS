@@ -18,7 +18,6 @@ const Home: React.FC = () => {
     isSearchingAI,
     currentInterimText,
     aiResponseText,
-    audioRef,
   } = useVoiceLoop(supabase, session);
 
   const handleSignOut = async () => {
@@ -64,8 +63,6 @@ const Home: React.FC = () => {
           {isVoiceLoopActive ? <Square className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
         </Button>
       </footer>
-
-      <audio ref={audioRef} className="hidden" />
     </div>
   );
 };

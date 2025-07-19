@@ -205,7 +205,6 @@ export function useAIInteraction(
           user_id: session.user.id,
           input_text: text,
           response_text: finalSpokenText,
-          audio_url: audioUrl,
         });
         if (dbError) {
           console.error('Error saving interaction:', dbError.message);
