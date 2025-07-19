@@ -114,59 +114,42 @@ export function useAIInteraction(
 
   const processUserInput = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
     setIsThinkingAI(true);
+    setIsSearchingAI(false);
 
+    const historyForGemini = [...messages];
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
-    setMessages(prevMessages => [...prevMessages, newUserMessage]);
 
-    let aiText = '';
-    let audioUrl: string | null = null;
     let finalSpokenText = '';
+    let audioUrl: string | null = null;
 
     try {
-      const historyForGemini = messages;
-
       const geminiResponse = await supabase.functions.invoke('gemini-chat', {
         body: { prompt: text, history: historyForGemini },
       });
 
-      if (geminiResponse.error) {
-        throw new Error(geminiResponse.error.message);
-      }
-      aiText = geminiResponse.data.text;
+      if (geminiResponse.error) throw new Error(geminiResponse.error.message);
+      let aiText = geminiResponse.data.text;
+      if (!aiText) throw new Error("AI returned an empty response.");
 
-      if (!aiText) {
-        toast.info("AI returned an empty response.");
-        throw new Error("AI returned an empty response.");
-      }
-
-      let isToolCall = false;
-      let cleanedAiText = aiText;
+      finalSpokenText = aiText;
 
       const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/;
       const match = aiText.match(jsonBlockRegex);
-
-      if (match && match[1]) {
-        cleanedAiText = match[1];
-      }
+      const cleanedAiText = match ? match[1] : aiText;
 
       try {
         const parsed = JSON.parse(cleanedAiText);
-        if (parsed.tool === "www.go.io" && parsed.params && parsed.params.query) {
-          isToolCall = true;
+        if (parsed.tool === "www.go.io" && parsed.params?.query) {
           toast.info("Searching the web...");
           setIsSearchingAI(true);
 
-          const searchQuery = parsed.params.query;
-          const searchResult = await runSearchTool(supabase, searchQuery);
-
-          setIsSearchingAI(false);
-
+          const searchResult = await runSearchTool(supabase, parsed.params.query);
+          
           const historyForSummarization = [
             ...historyForGemini,
             newUserMessage,
             { role: 'model' as const, parts: [{ text: aiText }] },
           ];
-
           const summarizePromptText = `Summarize this for voice: ${searchResult}`;
 
           const summaryResponse = await supabase.functions.invoke('gemini-chat', {
@@ -174,42 +157,31 @@ export function useAIInteraction(
           });
 
           if (summaryResponse.error || !summaryResponse.data?.text) {
-            console.error('Error or empty response summarizing search result:', summaryResponse.error?.message || 'Empty text from Gemini');
             toast.warn("AI couldn't summarize the search result. Reading it directly.");
-            finalSpokenText = searchResult; // Fallback to the raw search result
+            finalSpokenText = searchResult;
           } else {
             finalSpokenText = summaryResponse.data.text;
           }
         }
-      } catch (parseError) {
-        isToolCall = false;
-      } finally {
-        setIsSearchingAI(false);
-      }
-
-      if (!isToolCall) {
-        finalSpokenText = aiText;
+      } catch (e) {
+        // Not a JSON tool call, do nothing
       }
 
       audioUrl = await speakAIResponse(finalSpokenText);
 
-      setMessages(prevMessages => {
-        const updatedMessages = [...prevMessages.slice(0, -1), newUserMessage, { role: 'model' as const, parts: [{ text: finalSpokenText }] }];
-        const slicedMessages = updatedMessages.slice(Math.max(updatedMessages.length - MAX_HISTORY_MESSAGES, 0));
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slicedMessages));
-        return slicedMessages;
-      });
+      const newAiMessage: ChatMessage = { role: 'model', parts: [{ text: finalSpokenText }] };
+      const newMessages = [...historyForGemini, newUserMessage, newAiMessage];
+      
+      const slicedMessages = newMessages.slice(Math.max(newMessages.length - MAX_HISTORY_MESSAGES, 0));
+      setMessages(slicedMessages);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slicedMessages));
 
       if (session?.user?.id) {
-        const { error: dbError } = await supabase.from('interactions').insert({
+        await supabase.from('interactions').insert({
           user_id: session.user.id,
           input_text: text,
           response_text: finalSpokenText,
         });
-        if (dbError) {
-          console.error('Error saving interaction:', dbError.message);
-          toast.error('Failed to save interaction history to database.');
-        }
       }
 
       return { text: finalSpokenText, audioUrl };
@@ -218,10 +190,15 @@ export function useAIInteraction(
       console.error('Overall error in AI interaction:', error);
       const errorMessage = `Failed to get AI response: ${error.message}.`;
       toast.error(errorMessage);
-      setMessages(prev => [...prev.slice(0, -1), { role: 'model', parts: [{ text: `Sorry, an error occurred: ${error.message}` }] }]);
+      
+      const errorAiMessage: ChatMessage = { role: 'model', parts: [{ text: `Sorry, an error occurred: ${error.message}` }] };
+      const newMessages = [...historyForGemini, newUserMessage, errorAiMessage];
+      setMessages(newMessages.slice(Math.max(newMessages.length - MAX_HISTORY_MESSAGES, 0)));
+
       throw error;
     } finally {
       setIsThinkingAI(false);
+      setIsSearchingAI(false);
     }
   }, [supabase, session, speakAIResponse, messages]);
 
