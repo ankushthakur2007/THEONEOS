@@ -173,9 +173,10 @@ export function useAIInteraction(
             body: { prompt: summarizePromptText, history: historyForSummarization },
           });
 
-          if (summaryResponse.error) {
-            console.error('Error summarizing search result:', summaryResponse.error.message);
-            finalSpokenText = "I found some information, but I had trouble summarizing it.";
+          if (summaryResponse.error || !summaryResponse.data?.text) {
+            console.error('Error or empty response summarizing search result:', summaryResponse.error?.message || 'Empty text from Gemini');
+            toast.warn("AI couldn't summarize the search result. Reading it directly.");
+            finalSpokenText = searchResult; // Fallback to the raw search result
           } else {
             finalSpokenText = summaryResponse.data.text;
           }
