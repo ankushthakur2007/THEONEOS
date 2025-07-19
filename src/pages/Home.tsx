@@ -31,7 +31,7 @@ const Home: React.FC = () => {
   const displayText = isSpeakingAI ? aiResponseText : currentInterimText;
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden animate-fade-in">
       <header className="p-4 flex justify-between items-center absolute top-0 left-0 right-0 z-10">
         <h1 className="text-xl font-bold">JARVIS</h1>
         <DropdownMenu>

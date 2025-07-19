@@ -105,6 +105,10 @@ export default {
             "50%": { transform: "rotate3d(2, 0.5, -1, 180deg) scale(1.1)" },
             "100%": { transform: "rotate3d(1, 1, 1, 360deg) scale(1)" },
         },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -112,6 +116,7 @@ export default {
         "pulse-glow": "pulse-glow 4s infinite ease-in-out",
         "wave": "wave 2s infinite ease-out",
         "rotate-complex": "rotate-complex 5s linear infinite",
+        "fade-in": "fade-in 0.4s ease-out",
       },
     },
   },

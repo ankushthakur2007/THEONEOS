@@ -44,7 +44,7 @@ const Settings: React.FC = () => {
   }, [session, supabase]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8 animate-fade-in">
       <div className="max-w-2xl mx-auto">
         <Button variant="ghost" onClick={() => navigate('/home')} className="mb-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -60,8 +60,8 @@ const Settings: React.FC = () => {
               <h3 className="text-lg font-medium">Profile</h3>
               {loading ? (
                 <div className="space-y-2">
-                  <Skeleton className="h-6 w-1/2" />
-                  <Skeleton className="h-6 w-1/3" />
+                  <Skeleton className="h-6 w-1/2 animate-pulse" />
+                  <Skeleton className="h-6 w-1/3 animate-pulse" />
                 </div>
               ) : profile ? (
                 <div className="space-y-1">

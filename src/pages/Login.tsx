@@ -80,7 +80,7 @@ const Login: React.FC = () => {
   }, [isSignUp, form.reset]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4 animate-fade-in">
       <Card className="w-full max-w-md p-6 space-y-4">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-bold">THEONEOS</CardTitle>
