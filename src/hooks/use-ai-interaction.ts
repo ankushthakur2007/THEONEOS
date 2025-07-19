@@ -51,7 +51,12 @@ export function useAIInteraction(
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [isSearchingAI, setIsSearchingAI] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
   const isInitialLoad = useRef(true);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -116,7 +121,7 @@ export function useAIInteraction(
     setIsThinkingAI(true);
     setIsSearchingAI(false);
 
-    const historyForGemini = [...messages];
+    const historyForGemini = [...messagesRef.current];
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
 
     let finalSpokenText = '';
@@ -200,7 +205,7 @@ export function useAIInteraction(
       setIsThinkingAI(false);
       setIsSearchingAI(false);
     }
-  }, [supabase, session, speakAIResponse, messages]);
+  }, [supabase, session, speakAIResponse]);
 
   return {
     processUserInput,
