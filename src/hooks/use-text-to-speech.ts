@@ -6,6 +6,7 @@ interface UseTextToSpeechReturn {
   isSpeakingAI: boolean;
   aiResponseText: string;
   cancelSpeech: () => void;
+  prime: () => void;
 }
 
 export function useTextToSpeech(): UseTextToSpeechReturn {
@@ -23,6 +24,16 @@ export function useTextToSpeech(): UseTextToSpeechReturn {
       clearTimeout(speechTimeoutIdRef.current);
       speechTimeoutIdRef.current = null;
     }
+  }, []);
+
+  const prime = useCallback(() => {
+    if (!('speechSynthesis' in window) || window.speechSynthesis.speaking) {
+      return;
+    }
+    console.log("Priming Web Speech API...");
+    const utterance = new SpeechSynthesisUtterance(' ');
+    utterance.volume = 0;
+    window.speechSynthesis.speak(utterance);
   }, []);
 
   const speakWithWebSpeechAPI = useCallback((text: string) => {
@@ -87,5 +98,6 @@ export function useTextToSpeech(): UseTextToSpeechReturn {
     isSpeakingAI,
     aiResponseText,
     cancelSpeech,
+    prime,
   };
 }

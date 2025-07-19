@@ -41,6 +41,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     isSpeakingAI,
     aiResponseText,
     cancelSpeech,
+    prime: primeTTS,
   } = useTextToSpeech();
 
   const {
@@ -55,12 +56,13 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   );
 
   const startVoiceLoop = useCallback(() => {
+    primeTTS();
     if (!isVoiceLoopActiveRef.current) {
       setIsVoiceLoopActive(true);
       isVoiceLoopActiveRef.current = true;
       runVoiceLoop();
     }
-  }, []);
+  }, [primeTTS]);
 
   const stopVoiceLoop = useCallback(() => {
     if (isVoiceLoopActiveRef.current) {
