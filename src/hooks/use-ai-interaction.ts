@@ -86,7 +86,6 @@ export function useAIInteraction(
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullResponse = "";
-      let clientSideMessages = [...messages, newUserMessage, { role: 'model', parts: [{ text: '' }] }];
 
       while (true) {
         const { value, done } = await reader.read();
@@ -127,7 +126,7 @@ export function useAIInteraction(
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, conversationId, setConversationId, messages, fetchMessages]);
+  }, [supabase, session, conversationId, setConversationId, fetchMessages]);
 
   return {
     processUserInput,
