@@ -1,4 +1,4 @@
-import React from 'react';
+import { FC, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -8,13 +8,23 @@ interface MarkdownRendererProps {
   content: string;
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
+// Define a specific type for the props our custom code component will receive.
+// This tells TypeScript that 'inline' is an expected prop.
+interface CodeProps {
+  node?: any;
+  inline?: boolean;
+  className?: string;
+  children?: ReactNode;
+}
+
+export const MarkdownRenderer: FC<MarkdownRendererProps> = ({ content }) => {
   return (
     <div className="prose dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-blockquote:not-italic">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, inline, className, children, ref, ...props }) {
+          // Apply our custom type to the component's props.
+          code({ node, inline, className, children, ...props }: CodeProps) {
             const match = /language-(\w+)/.exec(className || '');
             return !inline && match ? (
               <SyntaxHighlighter
