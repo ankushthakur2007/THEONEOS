@@ -7,8 +7,12 @@ interface ChatMessage {
   parts: { text: string }[];
 }
 
+interface ProcessUserInputOptions {
+  speak?: boolean;
+}
+
 interface UseAIInteractionReturn {
-  processUserInput: (text: string) => Promise<{ text: string; audioUrl: string | null }>;
+  processUserInput: (text: string, options?: ProcessUserInputOptions) => Promise<{ text: string; audioUrl: string | null }>;
   isThinkingAI: boolean;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -78,7 +82,7 @@ export function useAIInteraction(
     fetchInitialData();
   }, [session?.user?.id, supabase]);
 
-  const processUserInput = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
+  const processUserInput = useCallback(async (text: string, options: ProcessUserInputOptions = { speak: false }): Promise<{ text: string; audioUrl: string | null }> => {
     setIsThinkingAI(true);
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
@@ -95,7 +99,10 @@ export function useAIInteraction(
       if (!data.text) throw new Error("AI returned an empty response.");
 
       const aiText = data.text;
-      audioUrl = await speakAIResponse(aiText);
+      
+      if (options.speak) {
+        audioUrl = await speakAIResponse(aiText);
+      }
 
       const newAiMessage: ChatMessage = { role: 'model', parts: [{ text: aiText }] };
       setMessages(prev => [...prev, newAiMessage]);

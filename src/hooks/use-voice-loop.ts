@@ -10,6 +10,10 @@ interface ChatMessage {
   parts: { text: string }[];
 }
 
+interface ProcessUserInputOptions {
+  speak?: boolean;
+}
+
 interface UseVoiceLoopReturn {
   isVoiceLoopActive: boolean;
   startVoiceLoop: () => void;
@@ -21,7 +25,7 @@ interface UseVoiceLoopReturn {
   currentInterimText: string;
   aiResponseText: string;
   isRecognitionReady: boolean;
-  processUserInput: (text: string) => Promise<{ text: string; audioUrl: string | null }>;
+  processUserInput: (text: string, options?: ProcessUserInputOptions) => Promise<{ text: string; audioUrl: string | null }>;
   messages: ChatMessage[];
 }
 
@@ -80,7 +84,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       }
 
       try {
-        const aiResponse = await processUserInput(userText);
+        const aiResponse = await processUserInput(userText, { speak: true });
         if (!aiResponse || !aiResponse.text) {
           throw new Error("AI returned an empty response.");
         }
