@@ -21,7 +21,11 @@ Based on the user's query, here are some relevant past interactions or facts you
 ---
 {{memories}}
 ---
-
+📜 Recent Conversation History:
+Here are the last few messages from your most recent conversation with the user.
+---
+{{recent_messages}}
+---
 🛠️ You have access to one tool:
 
 🔧 \`www.go.io\` — Google-powered internet search tool via Serper.dev.
@@ -133,8 +137,33 @@ serve(async (req) => {
       ? memories.map((m: any) => `- ${m.memory_text}`).join('\n')
       : 'No relevant memories found.';
 
-    let finalSystemInstruction = systemInstructionText.replace('{{memories}}', memoryText);
-    finalSystemInstruction = finalSystemInstruction.replace('{{personality}}', personality);
+    // --- FETCH RECENT MESSAGES FOR CONTEXT ---
+    let recentMessagesText = 'No recent conversations found.';
+    const { data: lastConversation } = await supabaseAdmin
+      .from('conversations')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (lastConversation) {
+      const { data: lastMessages, error: lastMessagesError } = await supabaseAdmin
+        .from('messages')
+        .select('role, content')
+        .eq('conversation_id', lastConversation.id)
+        .order('created_at', { ascending: false })
+        .limit(4); // Fetch the last 4 messages
+
+      if (lastMessages && lastMessages.length > 0) {
+        recentMessagesText = lastMessages.reverse().map((m: any) => `${m.role}: ${m.content}`).join('\n');
+      }
+    }
+
+    let finalSystemInstruction = systemInstructionText
+      .replace('{{memories}}', memoryText)
+      .replace('{{personality}}', personality)
+      .replace('{{recent_messages}}', recentMessagesText);
 
     // --- REASON ---
     let conversationId = initialConversationId;

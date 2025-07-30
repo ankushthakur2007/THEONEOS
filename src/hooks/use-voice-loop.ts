@@ -129,12 +129,14 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       console.error("Continuous recognition error in VoiceLoop:", error);
       if (error.includes("not-allowed") || error.includes("Microphone access denied")) {
         toast.error("Microphone access denied. Please enable microphone permissions.");
+        stopVoiceLoop(); // Only stop for critical permission errors
       } else if (error.includes("no-speech")) {
-        console.log("Continuous Listener: No speech detected, recognition continuing.");
+        console.log("Continuous Listener: No speech detected, recognition will restart.");
+        // Do nothing, let the recognizer restart automatically
       } else {
         toast.error(`Voice input error: ${error}`);
+        // Don't stop the loop for other recoverable errors
       }
-      stopVoiceLoop();
     }, [stopVoiceLoop])
   );
 
