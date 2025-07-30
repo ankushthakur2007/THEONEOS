@@ -68,35 +68,62 @@ export function useAIInteraction(
   }, [session?.user?.id, supabase, conversationId]);
 
   const processUserInput = useCallback(async (text: string, options: ProcessUserInputOptions = { speak: false }): Promise<{ text: string; audioUrl: string | null }> => {
+    if (!session) {
+        toast.error("You must be logged in to chat.");
+        throw new Error("User not authenticated");
+    }
     setIsThinkingAI(true);
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
-    setMessages(prev => [...prev, newUserMessage]);
-
-    let audioUrl: string | null = null;
+    setMessages(prev => [...prev, newUserMessage, { role: 'model', parts: [{ text: '' }] }]);
 
     try {
-      const { data, error } = await supabase.functions.invoke('gemini-chat', {
-        body: { prompt: text, conversationId },
+      const response = await fetch(`https://myqjitezxfqxcoqmycgk.supabase.co/functions/v1/gemini-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ prompt: text, conversationId }),
       });
 
-      if (error) throw new Error(error.message);
-      if (!data.text) throw new Error("AI returned an empty response.");
+      if (!response.ok || !response.body) {
+        const errorData = await response.json().catch(() => ({ error: 'An unknown error occurred.' }));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
 
-      const aiText = data.text;
-      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        fullResponse += chunk;
+
+        setMessages(prev => {
+            const updatedMessages = [...prev];
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'model') {
+                lastMessage.parts[0].text += chunk;
+            }
+            return updatedMessages;
+        });
+      }
+
+      const newConversationId = response.headers.get('X-Conversation-Id');
+      if (newConversationId && !conversationId) {
+        setConversationId(newConversationId);
+      }
+
+      let audioUrl: string | null = null;
       if (options.speak) {
-        audioUrl = await speakAIResponse(aiText);
+        audioUrl = await speakAIResponse(fullResponse);
       }
 
-      const newAiMessage: ChatMessage = { role: 'model', parts: [{ text: aiText }] };
-      setMessages(prev => [...prev, newAiMessage]);
-
-      if (data.conversationId && !conversationId) {
-        setConversationId(data.conversationId);
-      }
-
-      return { text: aiText, audioUrl };
+      return { text: fullResponse, audioUrl };
 
     } catch (error: any) {
       console.error('Overall error in AI interaction:', error);
@@ -104,13 +131,13 @@ export function useAIInteraction(
       toast.error(errorMessage);
       
       const errorAiMessage: ChatMessage = { role: 'model', parts: [{ text: `Sorry, an error occurred: ${error.message}` }] };
-      setMessages(prev => [...prev, errorAiMessage]);
+      setMessages(prev => [...prev.slice(0, -1), errorAiMessage]);
 
       throw error;
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, speakAIResponse, conversationId, setConversationId]);
+  }, [supabase, session, speakAIResponse, conversationId, setConversationId]);
 
   return {
     processUserInput,
