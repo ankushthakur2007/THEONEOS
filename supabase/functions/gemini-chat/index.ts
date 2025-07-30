@@ -73,8 +73,11 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let conversationId: string | null = null;
+
   try {
     const { prompt, conversationId: initialConversationId } = await req.json();
+    conversationId = initialConversationId;
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 
     if (!geminiApiKey) throw new Error('Gemini API key not set.');
@@ -116,7 +119,6 @@ serve(async (req) => {
       ? memories.map((m: any) => `- ${m.memory_text}`).join('\n')
       : 'No relevant memories found.';
 
-    let conversationId = initialConversationId;
     if (!conversationId) {
       const { data: newConversation, error: convError } = await supabaseAdmin
         .from('conversations')
@@ -195,95 +197,72 @@ serve(async (req) => {
 
     const stream = new ReadableStream({
       async start(controller) {
-        await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'user', content: prompt });
+        try {
+          await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'user', content: prompt });
 
-        let result = await chat.sendMessage(prompt);
-        let response = result.response;
-        let finalResponseText = "";
+          const result = await chat.sendMessage(prompt);
+          const response = result.response;
+          let finalResponseText = "";
 
-        if (response.functionCalls && response.functionCalls.length > 0) {
-          const call = response.functionCalls[0];
-          if (call.name === 'searchTheWeb') {
-            const { query } = call.args;
-            console.log(`AI is searching the web for: "${query}"`);
-            
-            const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('searchWithSerper', { body: { query } });
-            if (searchError) throw searchError;
+          if (response.functionCalls && response.functionCalls.length > 0) {
+            const call = response.functionCalls[0];
+            if (call.name === 'searchTheWeb') {
+              const { query } = call.args;
+              console.log(`AI is searching the web for: "${query}"`);
+              
+              const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('searchWithSerper', { body: { query } });
+              if (searchError) throw searchError;
 
-            const toolResponsePart: Part = {
-              functionResponse: {
-                name: 'searchTheWeb',
-                response: { result: searchData.result },
-              },
-            };
+              const toolResponsePart: Part = {
+                functionResponse: {
+                  name: 'searchTheWeb',
+                  response: { result: searchData.result },
+                },
+              };
 
-            const finalResult = await chat.sendMessage([toolResponsePart]);
-            finalResponseText = finalResult.response.text();
-          } else {
-            finalResponseText = `Error: Model tried to call unknown function ${call.name}`;
-          }
-        } else {
-          finalResponseText = response.text();
-        }
-
-        controller.enqueue(new TextEncoder().encode(finalResponseText));
-
-        await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'model', content: finalResponseText });
-        await supabaseAdmin.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
-
-        const newMemoryText = `User asked: "${prompt}". JARVIS responded: "${finalResponseText}"`;
-        const memoryEmbeddingResult = await embeddingModel.embedContent(newMemoryText);
-        const newMemoryEmbedding = memoryEmbeddingResult.embedding.values;
-
-        await supabaseAdmin.from('user_memories').insert({
-          user_id: user.id,
-          memory_text: newMemoryText,
-          embedding: newMemoryEmbedding,
-        });
-
-        const { count: messageCount, error: countError } = await supabaseAdmin
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conversationId);
-
-        if (!countError && messageCount && messageCount > 0 && messageCount % 10 === 0) {
-          console.log(`Conversation ${conversationId} reached ${messageCount} messages. Triggering summarization.`);
-          
-          const { data: messagesForSummary, error: summaryMessagesError } = await supabaseAdmin
-            .from('messages').select('role, content').eq('conversation_id', conversationId)
-            .order('created_at', { ascending: false }).limit(12);
-
-          if (!summaryMessagesError && messagesForSummary) {
-            const { data: currentConversation } = await supabaseAdmin
-              .from('conversations').select('summary').eq('id', conversationId).single();
-            
-            const oldSummary = currentConversation?.summary || 'This is the beginning of the conversation.';
-            const conversationText = messagesForSummary.reverse().map(m => `${m.role}: ${m.content}`).join('\n');
-            
-            const summaryPrompt = `Concisely summarize the following conversation. The goal is to create a "rolling summary" that captures the key points to remember for a long-running chat.
-            
-            PREVIOUS SUMMARY:
-            "${oldSummary}"
-            
-            RECENT MESSAGES:
-            ---
-            ${conversationText}
-            ---
-            
-            Based on the previous summary and the recent messages, create a new, updated summary. It should be a single, coherent paragraph.`;
-
-            try {
-              const summaryResult = await chatModel.generateContent(summaryPrompt);
-              const newSummary = summaryResult.response.text();
-              await supabaseAdmin.from('conversations').update({ summary: newSummary }).eq('id', conversationId);
-              console.log(`Successfully updated summary for conversation ${conversationId}.`);
-            } catch (summaryError) {
-              console.error('Error generating or saving summary:', summaryError);
+              const finalResultStream = await chat.sendMessageStream([toolResponsePart]);
+              for await (const chunk of finalResultStream.stream) {
+                const chunkText = chunk.text();
+                finalResponseText += chunkText;
+                controller.enqueue(new TextEncoder().encode(chunkText));
+              }
+            } else {
+              finalResponseText = `Error: Model tried to call unknown function ${call.name}`;
+              controller.enqueue(new TextEncoder().encode(finalResponseText));
             }
+          } else {
+            finalResponseText = response.text();
+            controller.enqueue(new TextEncoder().encode(finalResponseText));
           }
-        }
 
-        controller.close();
+          controller.close();
+
+          // Post-response background tasks
+          (async () => {
+            try {
+              await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'model', content: finalResponseText });
+              await supabaseAdmin.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId!);
+
+              const newMemoryText = `User asked: "${prompt}". JARVIS responded: "${finalResponseText}"`;
+              const memoryEmbeddingResult = await embeddingModel.embedContent(newMemoryText);
+              const newMemoryEmbedding = memoryEmbeddingResult.embedding.values;
+
+              await supabaseAdmin.from('user_memories').insert({
+                user_id: user.id,
+                memory_text: newMemoryText,
+                embedding: newMemoryEmbedding,
+              });
+              
+              // Summarization logic can go here if needed
+            } catch (bgError) {
+              console.error("Error in background DB tasks:", bgError);
+            }
+          })();
+
+        } catch (streamError) {
+          console.error('Error within stream:', streamError.message);
+          controller.error(streamError);
+        }
       },
     });
 
@@ -292,8 +271,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in Gemini chat function:', error.message);
+    const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'X-Conversation-Id': conversationId || '' };
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: responseHeaders,
       status: 500,
     });
   }
