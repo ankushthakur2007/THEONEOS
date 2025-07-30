@@ -27,6 +27,11 @@ Please avoid the following common mistakes:
 
 You must always respond using Markdown format.
 ---
+📜 Conversation Summary:
+Here is a summary of the conversation so far. Use it to maintain context over long discussions.
+---
+{{summary}}
+---
 🧠 Relevant Memories:
 Based on the user's query, here are some relevant past interactions or facts you should consider. If none are provided, you have no relevant memories.
 ---
@@ -88,7 +93,17 @@ serve(async (req) => {
       : 'No relevant memories found.';
 
     let recentMessagesText = 'No recent conversations found.';
+    let conversationSummary = 'No summary yet.';
     if (initialConversationId) {
+      const { data: convData } = await supabaseAdmin
+        .from('conversations')
+        .select('summary')
+        .eq('id', initialConversationId)
+        .single();
+      if (convData?.summary) {
+        conversationSummary = convData.summary;
+      }
+
       const { data: lastMessages } = await supabaseAdmin
         .from('messages')
         .select('role, content')
@@ -101,6 +116,7 @@ serve(async (req) => {
     }
 
     const finalSystemInstruction = systemInstructionText
+      .replace('{{summary}}', conversationSummary)
       .replace('{{memories}}', memoryText)
       .replace('{{personality}}', personality)
       .replace('{{recent_messages}}', recentMessagesText);
@@ -162,6 +178,54 @@ serve(async (req) => {
           memory_text: newMemoryText,
           embedding: newMemoryEmbedding,
         });
+
+        // --- Start Summarization Logic ---
+        const { count: messageCount, error: countError } = await supabaseAdmin
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conversationId);
+
+        if (countError) {
+          console.error('Error counting messages for summarization:', countError);
+        } else if (messageCount && messageCount > 0 && messageCount % 10 === 0) {
+          console.log(`Conversation ${conversationId} reached ${messageCount} messages. Triggering summarization.`);
+          
+          const { data: messagesForSummary, error: summaryMessagesError } = await supabaseAdmin
+            .from('messages').select('role, content').eq('conversation_id', conversationId)
+            .order('created_at', { ascending: false }).limit(12);
+
+          if (summaryMessagesError) {
+            console.error('Error fetching messages for summary:', summaryMessagesError);
+          } else if (messagesForSummary) {
+            const { data: currentConversation } = await supabaseAdmin
+              .from('conversations').select('summary').eq('id', conversationId).single();
+            
+            const oldSummary = currentConversation?.summary || 'This is the beginning of the conversation.';
+            const conversationText = messagesForSummary.reverse().map(m => `${m.role}: ${m.content}`).join('\n');
+            
+            const summaryPrompt = `Concisely summarize the following conversation. The goal is to create a "rolling summary" that captures the key points to remember for a long-running chat.
+            
+            PREVIOUS SUMMARY:
+            "${oldSummary}"
+            
+            RECENT MESSAGES:
+            ---
+            ${conversationText}
+            ---
+            
+            Based on the previous summary and the recent messages, create a new, updated summary. It should be a single, coherent paragraph.`;
+
+            try {
+              const summaryResult = await chatModel.generateContent(summaryPrompt);
+              const newSummary = summaryResult.response.text();
+              await supabaseAdmin.from('conversations').update({ summary: newSummary }).eq('id', conversationId);
+              console.log(`Successfully updated summary for conversation ${conversationId}.`);
+            } catch (summaryError) {
+              console.error('Error generating or saving summary:', summaryError);
+            }
+          }
+        }
+        // --- End Summarization Logic ---
 
         controller.close();
       },
