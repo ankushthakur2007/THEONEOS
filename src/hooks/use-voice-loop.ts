@@ -29,7 +29,6 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const [isVoiceLoopActive, setIsVoiceLoopActive] = useState(false);
   const isVoiceLoopActiveRef = useRef(isVoiceLoopActive);
 
-  const [isRecordingUser, setIsRecordingUser] = useState(false);
   const [currentInterimText, setCurrentInterimText] = useState('');
 
   const userCommandQueueRef = useRef<string[]>([]);
@@ -84,7 +83,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const {
     startListening: startContinuousListening,
     stopListening: stopContinuousListening,
-    isListening: csrIsListening,
+    isListening: isRecordingUser, // Directly use the listening state from the hook for UI feedback
     isReady: csrIsReady,
     resetTranscript: csrResetTranscript,
   } = useContinuousSpeechRecognition(
@@ -151,10 +150,6 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     };
   }, [csrIsReady, startContinuousListening, stopContinuousListening]);
 
-  useEffect(() => {
-    setIsRecordingUser(isVoiceLoopActive && csrIsListening);
-  }, [isVoiceLoopActive, csrIsListening]);
-
   const getUserCommand = useCallback(async (): Promise<string> => {
     if (userCommandQueueRef.current.length > 0) {
       return userCommandQueueRef.current.shift()!;
@@ -166,7 +161,6 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   }, []);
 
   const resetAllFlags = useCallback(() => {
-    setIsRecordingUser(false);
     setCurrentInterimText('');
     csrResetTranscript();
   }, [csrResetTranscript]);
