@@ -6,17 +6,20 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log("--- [searchWithSerper START] ---");
+  console.log("--- [searchWithSerper] Invoked ---");
   if (req.method === 'OPTIONS') {
+    console.log("--- [searchWithSerper] Handling OPTIONS request ---");
     return new Response(null, { headers: corsHeaders });
   }
+  console.log(`--- [searchWithSerper] Handling ${req.method} request ---`);
 
   try {
     const { query } = await req.json();
+    console.log(`--- [searchWithSerper] Received query: "${query}" ---`);
     const serperApiKey = Deno.env.get("SERPER_API_KEY");
 
     if (!serperApiKey) {
-      console.error('SERPER_API_KEY not set in environment variables.');
+      console.error('--- [searchWithSerper] SERPER_API_KEY not set in environment variables. ---');
       return new Response(JSON.stringify({ error: 'Serper API key not set.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
@@ -34,11 +37,12 @@ serve(async (req) => {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('Serper.dev API error:', errorText);
+      console.error('--- [searchWithSerper] Serper.dev API error:', errorText);
       throw new Error(`Serper.dev failed: ${res.status} - ${errorText}`);
     }
 
     const data = await res.json();
+    console.log("--- [searchWithSerper] Received data from Serper API ---");
 
     const result =
       data.answerBox?.answer ||
@@ -46,12 +50,13 @@ serve(async (req) => {
       data.organic?.[0]?.snippet ||
       "I couldn't find anything helpful online.";
 
+    console.log(`--- [searchWithSerper] Sending result: "${result}" ---`);
     return new Response(JSON.stringify({ result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
   } catch (error) {
-    console.error('Error in searchWithSerper function:', error.message);
+    console.error('--- [searchWithSerper] Error in function:', error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
