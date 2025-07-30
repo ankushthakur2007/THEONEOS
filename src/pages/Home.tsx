@@ -187,6 +187,7 @@ const Home: React.FC = () => {
           <ChatInterface
             messages={messages}
             isLoadingHistory={isLoadingHistory}
+            conversationId={selectedConversationId}
           />
         )}
       </main>

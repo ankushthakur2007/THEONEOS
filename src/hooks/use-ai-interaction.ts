@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
-interface ChatMessage {
+export interface ChatMessage {
+  id?: string;
   role: 'user' | 'model';
   parts: { text: string }[];
 }
@@ -25,42 +26,37 @@ export function useAIInteraction(
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  useEffect(() => {
-    if (!session?.user?.id) {
-      setIsLoadingHistory(false);
+  const fetchMessages = useCallback(async (convId: string | null) => {
+    if (!session?.user?.id || !convId) {
       setMessages([]);
+      setIsLoadingHistory(false);
       return;
     }
 
-    const fetchMessages = async () => {
-      if (!conversationId) {
-        setMessages([]);
-        setIsLoadingHistory(false);
-        return;
-      }
+    setIsLoadingHistory(true);
+    const { data: messagesData, error: messagesError } = await supabase
+      .from('messages')
+      .select('id, role, content')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true });
+    
+    if (messagesError) {
+      console.error("Error fetching messages:", messagesError);
+      toast.error("Could not load messages for the conversation.");
+    } else if (messagesData) {
+      const formattedMessages = messagesData.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'model',
+        parts: [{ text: msg.content }],
+      }));
+      setMessages(formattedMessages);
+    }
+    setIsLoadingHistory(false);
+  }, [session, supabase]);
 
-      setIsLoadingHistory(true);
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('messages')
-        .select('role, content')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-      
-      if (messagesError) {
-        console.error("Error fetching messages:", messagesError);
-        toast.error("Could not load messages for the conversation.");
-      } else if (messagesData) {
-        const formattedMessages = messagesData.map(msg => ({
-          role: msg.role as 'user' | 'model',
-          parts: [{ text: msg.content }],
-        }));
-        setMessages(formattedMessages);
-      }
-      setIsLoadingHistory(false);
-    };
-
-    fetchMessages();
-  }, [session?.user?.id, supabase, conversationId]);
+  useEffect(() => {
+    fetchMessages(conversationId);
+  }, [session?.user?.id, conversationId, fetchMessages]);
 
   const processUserInput = useCallback(async (text: string): Promise<{ text: string }> => {
     if (!session) {
@@ -90,6 +86,7 @@ export function useAIInteraction(
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullResponse = "";
+      let clientSideMessages = [...messages, newUserMessage, { role: 'model', parts: [{ text: '' }] }];
 
       while (true) {
         const { value, done } = await reader.read();
@@ -112,6 +109,9 @@ export function useAIInteraction(
       if (newConversationId && !conversationId) {
         setConversationId(newConversationId);
       }
+      
+      // Refetch messages to get proper IDs from the database
+      await fetchMessages(newConversationId || conversationId);
 
       return { text: fullResponse };
 
@@ -127,7 +127,7 @@ export function useAIInteraction(
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, conversationId, setConversationId]);
+  }, [supabase, session, conversationId, setConversationId, messages, fetchMessages]);
 
   return {
     processUserInput,

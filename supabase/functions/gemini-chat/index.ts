@@ -37,6 +37,11 @@ Based on the user's query, here are some relevant past interactions or facts you
 ---
 {{memories}}
 ---
+👍 User Feedback:
+Use this recent user feedback to improve your future responses.
+---
+{{feedback}}
+---
 📜 Recent Conversation History:
 Here are the last few messages from your most recent conversation with the user.
 ---
@@ -115,10 +120,26 @@ serve(async (req) => {
       }
     }
 
+    let feedbackText = 'No recent feedback has been provided.';
+    const { data: feedbackData } = await supabaseAdmin
+      .from('message_feedback')
+      .select('feedback, comment')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if (feedbackData && feedbackData.length > 0) {
+      feedbackText = 'Here is some recent feedback from the user on your past responses:\n' +
+        feedbackData.map((f: any) =>
+          `- A response was marked as '${f.feedback}'. User comment: "${f.comment || 'No comment'}"`
+        ).join('\n');
+    }
+
     const finalSystemInstruction = systemInstructionText
       .replace('{{summary}}', conversationSummary)
       .replace('{{memories}}', memoryText)
       .replace('{{personality}}', personality)
+      .replace('{{feedback}}', feedbackText)
       .replace('{{recent_messages}}', recentMessagesText);
 
     let conversationId = initialConversationId;
