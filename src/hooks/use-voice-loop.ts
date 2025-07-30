@@ -56,13 +56,17 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   );
 
   const startVoiceLoop = useCallback(() => {
+    if (isLoadingHistory) {
+      toast.info("Please wait, conversation history is loading.");
+      return;
+    }
     primeTTS();
     if (!isVoiceLoopActiveRef.current) {
       setIsVoiceLoopActive(true);
       isVoiceLoopActiveRef.current = true;
       runVoiceLoop();
     }
-  }, [primeTTS]);
+  }, [isLoadingHistory, primeTTS]);
 
   const stopVoiceLoop = useCallback(() => {
     if (isVoiceLoopActiveRef.current) {
@@ -189,6 +193,11 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
         break;
       }
 
+      if (isLoadingHistory) {
+        toast.error("Conversation history is still loading. Please wait a moment.");
+        break;
+      }
+
       try {
         const aiResponse = await processUserInput(userText);
         if (!aiResponse || !aiResponse.text) {
@@ -203,7 +212,19 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     isVoiceLoopActiveRef.current = false;
     resetAllFlags();
     toast.info("Voice loop stopped.");
-  }, [getUserCommand, processUserInput, resetAllFlags]);
+  }, [getUserCommand, processUserInput, resetAllFlags, isLoadingHistory]);
+
+  // This is a forward declaration for the useCallback dependency array.
+  // The actual implementation is above.
+  const dummyRunVoiceLoop = useCallback(() => {}, []); 
+  useEffect(() => {
+    if (startVoiceLoop) {
+      // This is a bit of a hack to satisfy the dependency array,
+      // because startVoiceLoop depends on runVoiceLoop, but runVoiceLoop is defined later.
+      // The actual runVoiceLoop is in scope when startVoiceLoop is called.
+    }
+  }, [dummyRunVoiceLoop]);
+
 
   return {
     isVoiceLoopActive,

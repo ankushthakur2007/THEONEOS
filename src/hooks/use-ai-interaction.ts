@@ -79,12 +79,6 @@ export function useAIInteraction(
   }, [session?.user?.id, supabase]);
 
   const processUserInput = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
-    if (isLoadingHistory) {
-      const errorMessage = "Conversation history is still loading. Please wait a moment.";
-      toast.error(errorMessage);
-      throw new Error(errorMessage);
-    }
-    
     setIsThinkingAI(true);
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
@@ -124,7 +118,7 @@ export function useAIInteraction(
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, speakAIResponse, conversationId, isLoadingHistory]);
+  }, [supabase, speakAIResponse, conversationId]);
 
   return {
     processUserInput,
