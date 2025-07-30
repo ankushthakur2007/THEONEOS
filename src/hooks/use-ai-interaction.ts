@@ -7,12 +7,8 @@ interface ChatMessage {
   parts: { text: string }[];
 }
 
-interface ProcessUserInputOptions {
-  speak?: boolean;
-}
-
 interface UseAIInteractionReturn {
-  processUserInput: (text: string, options?: ProcessUserInputOptions) => Promise<{ text: string; audioUrl: string | null }>;
+  processUserInput: (text: string) => Promise<{ text: string }>;
   isThinkingAI: boolean;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -22,7 +18,6 @@ interface UseAIInteractionReturn {
 export function useAIInteraction(
   supabase: SupabaseClient,
   session: Session | null,
-  speakAIResponse: (text: string) => Promise<string | null>,
   conversationId: string | null,
   setConversationId: (id: string | null) => void,
 ): UseAIInteractionReturn {
@@ -67,7 +62,7 @@ export function useAIInteraction(
     fetchMessages();
   }, [session?.user?.id, supabase, conversationId]);
 
-  const processUserInput = useCallback(async (text: string, options: ProcessUserInputOptions = { speak: false }): Promise<{ text: string; audioUrl: string | null }> => {
+  const processUserInput = useCallback(async (text: string): Promise<{ text: string }> => {
     if (!session) {
         toast.error("You must be logged in to chat.");
         throw new Error("User not authenticated");
@@ -118,12 +113,7 @@ export function useAIInteraction(
         setConversationId(newConversationId);
       }
 
-      let audioUrl: string | null = null;
-      if (options.speak) {
-        audioUrl = await speakAIResponse(fullResponse);
-      }
-
-      return { text: fullResponse, audioUrl };
+      return { text: fullResponse };
 
     } catch (error: any) {
       console.error('Overall error in AI interaction:', error);
@@ -137,7 +127,7 @@ export function useAIInteraction(
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, session, speakAIResponse, conversationId, setConversationId]);
+  }, [supabase, session, conversationId, setConversationId]);
 
   return {
     processUserInput,

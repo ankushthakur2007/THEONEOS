@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSession } from '@/components/SessionContextProvider';
 import { useAIInteraction } from '@/hooks/use-ai-interaction';
-import { useTextToSpeech } from '@/hooks/use-text-to-speech';
 import { useContinuousSpeechRecognition } from '@/hooks/use-continuous-speech-recognition';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Button } from '@/components/ui/button';
@@ -44,11 +43,9 @@ const Home: React.FC = () => {
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
 
-  const { speakAIResponse } = useTextToSpeech();
   const { processUserInput, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(
     supabase,
     session,
-    speakAIResponse,
     selectedConversationId,
     (id) => {
       setSelectedConversationId(id);
@@ -59,7 +56,7 @@ const Home: React.FC = () => {
   const handleFinalTranscript = async (transcript: string) => {
     if (transcript) {
       form.setValue('message', transcript);
-      await processUserInput(transcript, { speak: true });
+      await processUserInput(transcript);
       form.reset();
     }
   };
@@ -78,7 +75,7 @@ const Home: React.FC = () => {
 
   const handleTextSubmit = async (values: ChatFormValues) => {
     if (values.message) {
-      await processUserInput(values.message, { speak: false });
+      await processUserInput(values.message);
       form.reset();
     }
   };
