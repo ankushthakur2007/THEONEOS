@@ -203,9 +203,10 @@ serve(async (req) => {
     const response = await result.response;
     let aiText = response.text();
 
-    const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/;
+    const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/;
     const match = aiText.match(jsonBlockRegex);
-    if (match) {
+
+    if (match && match[1]) {
       try {
         const parsed = JSON.parse(match[1]);
         if (parsed.tool === "www.go.io" && parsed.params?.query) {
@@ -214,7 +215,9 @@ serve(async (req) => {
           const summaryResult = await chat.sendMessage(summarizePrompt);
           aiText = (await summaryResult.response).text();
         }
-      } catch (e) { /* Not a valid JSON, treat as regular text */ }
+      } catch (e) {
+        console.log("Could not parse tool call, treating as text.", e.message);
+      }
     }
 
     // --- LEARN ---
