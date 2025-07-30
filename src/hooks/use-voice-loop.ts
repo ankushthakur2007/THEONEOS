@@ -27,6 +27,7 @@ interface UseVoiceLoopReturn {
 
 export function useVoiceLoop(supabase: SupabaseClient, session: Session | null): UseVoiceLoopReturn {
   const [isVoiceLoopActive, setIsVoiceLoopActive] = useState(false);
+  const [startLoopAfterHistory, setStartLoopAfterHistory] = useState(false);
   const isVoiceLoopActiveRef = useRef(isVoiceLoopActive);
 
   const [currentInterimText, setCurrentInterimText] = useState('');
@@ -54,18 +55,60 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     speakAIResponse,
   );
 
+  const runVoiceLoop = useCallback(async () => {
+    while (isVoiceLoopActiveRef.current) {
+      csrResetTranscript(); // Start each command with a clean slate.
+      let userText = '';
+      try {
+        toast.info("Listening for your command...");
+        userText = await getUserCommand();
+        if (!userText) {
+          console.warn("User command was empty, stopping loop.");
+          break;
+        }
+      } catch (error: any) {
+        console.warn("Listen phase failed with error:", error.message);
+        if (!error.message.includes("Voice loop stopped.")) {
+          toast.error(`Listening error: ${error.message}`);
+        }
+        break;
+      }
+
+      if (isLoadingHistory) {
+        toast.error("Conversation history is still loading. Please wait a moment.");
+        break;
+      }
+
+      try {
+        const aiResponse = await processUserInput(userText);
+        if (!aiResponse || !aiResponse.text) {
+          throw new Error("AI returned an empty response.");
+        }
+      } catch (error: any) {
+        console.error("Think phase failed:", error.message);
+        break;
+      }
+    }
+    setIsVoiceLoopActive(false);
+    isVoiceLoopActiveRef.current = false;
+    setCurrentInterimText('');
+    toast.info("Voice loop stopped.");
+  }, [processUserInput, isLoadingHistory]);
+
   const startVoiceLoop = useCallback(() => {
     if (isLoadingHistory) {
-      toast.info("Please wait, conversation history is loading.");
+      toast.info("Just a moment, loading your conversation...");
+      setStartLoopAfterHistory(true);
       return;
     }
+    setStartLoopAfterHistory(false);
     primeTTS();
     if (!isVoiceLoopActiveRef.current) {
       setIsVoiceLoopActive(true);
       isVoiceLoopActiveRef.current = true;
       runVoiceLoop();
     }
-  }, [isLoadingHistory, primeTTS]);
+  }, [isLoadingHistory, primeTTS, runVoiceLoop]);
 
   const stopVoiceLoop = useCallback(() => {
     if (isVoiceLoopActiveRef.current) {
@@ -83,7 +126,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const {
     startListening: startContinuousListening,
     stopListening: stopContinuousListening,
-    isListening: isRecordingUser, // Directly use the listening state from the hook for UI feedback
+    isListening: isRecordingUser,
     isReady: csrIsReady,
     resetTranscript: csrResetTranscript,
   } = useContinuousSpeechRecognition(
@@ -119,23 +162,30 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       }
     }, [startVoiceLoop, stopVoiceLoop]),
     useCallback((interimTranscript) => {
-      // Always show the user what is being transcribed for better feedback.
       setCurrentInterimText(interimTranscript);
     }, []),
     useCallback((error) => {
       console.error("Continuous recognition error in VoiceLoop:", error);
       if (error.includes("not-allowed") || error.includes("Microphone access denied")) {
         toast.error("Microphone access denied. Please enable microphone permissions.");
-        stopVoiceLoop(); // Only stop for critical permission errors
+        stopVoiceLoop();
       } else if (error.includes("no-speech")) {
         console.log("Continuous Listener: No speech detected, recognition will restart.");
-        // Do nothing, let the recognizer restart automatically
       } else {
         toast.error(`Voice input error: ${error}`);
-        // Don't stop the loop for other recoverable errors
       }
     }, [stopVoiceLoop])
   );
+
+  const getUserCommand = useCallback(async (): Promise<string> => {
+    if (userCommandQueueRef.current.length > 0) {
+      return userCommandQueueRef.current.shift()!;
+    }
+    return new Promise((resolve, reject) => {
+      resolveUserCommandRef.current = resolve;
+      rejectUserCommandRef.current = reject;
+    });
+  }, []);
 
   useEffect(() => {
     isVoiceLoopActiveRef.current = isVoiceLoopActive;
@@ -150,75 +200,11 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     };
   }, [csrIsReady, startContinuousListening, stopContinuousListening]);
 
-  const getUserCommand = useCallback(async (): Promise<string> => {
-    if (userCommandQueueRef.current.length > 0) {
-      return userCommandQueueRef.current.shift()!;
-    }
-    return new Promise((resolve, reject) => {
-      resolveUserCommandRef.current = resolve;
-      rejectUserCommandRef.current = reject;
-    });
-  }, []);
-
-  const resetAllFlags = useCallback(() => {
-    setCurrentInterimText('');
-    csrResetTranscript();
-  }, [csrResetTranscript]);
-
-  const runVoiceLoop = useCallback(async () => {
-    while (isVoiceLoopActiveRef.current) {
-      resetAllFlags();
-
-      let userText = '';
-      try {
-        toast.info("Listening for your command...");
-        userText = await getUserCommand();
-        if (!userText) {
-          console.warn("User command was empty, stopping loop.");
-          break;
-        }
-      } catch (error: any) {
-        console.warn("Listen phase failed with error:", error.message);
-        if (error.message.includes("Speech recognition stopped by user command.")) {
-          console.log("Listen phase stopped by user command.");
-        } else {
-          toast.error(`Listening error: ${error.message}`);
-        }
-        break;
-      }
-
-      if (isLoadingHistory) {
-        toast.error("Conversation history is still loading. Please wait a moment.");
-        break;
-      }
-
-      try {
-        const aiResponse = await processUserInput(userText);
-        if (!aiResponse || !aiResponse.text) {
-          throw new Error("AI returned an empty response.");
-        }
-      } catch (error: any) {
-        console.error("Think phase failed:", error.message);
-        break;
-      }
-    }
-    setIsVoiceLoopActive(false);
-    isVoiceLoopActiveRef.current = false;
-    resetAllFlags();
-    toast.info("Voice loop stopped.");
-  }, [getUserCommand, processUserInput, resetAllFlags, isLoadingHistory]);
-
-  // This is a forward declaration for the useCallback dependency array.
-  // The actual implementation is above.
-  const dummyRunVoiceLoop = useCallback(() => {}, []); 
   useEffect(() => {
-    if (startVoiceLoop) {
-      // This is a bit of a hack to satisfy the dependency array,
-      // because startVoiceLoop depends on runVoiceLoop, but runVoiceLoop is defined later.
-      // The actual runVoiceLoop is in scope when startVoiceLoop is called.
+    if (!isLoadingHistory && startLoopAfterHistory) {
+      startVoiceLoop();
     }
-  }, [dummyRunVoiceLoop]);
-
+  }, [isLoadingHistory, startLoopAfterHistory, startVoiceLoop]);
 
   return {
     isVoiceLoopActive,
