@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
+import { useSession } from '@/components/SessionContextProvider';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -32,6 +33,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   isLoadingHistory,
   conversationId,
 }) => {
+  const { session } = useSession();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<ChatMessage | null>(null);
@@ -58,11 +60,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   const handleSubmitFeedback = async () => {
-    if (!feedbackMessage || !feedbackType || !conversationId || !feedbackMessage.id) return;
+    if (!feedbackMessage || !feedbackType || !conversationId || !feedbackMessage.id || !session?.user) return;
 
     const { error } = await supabase.from('message_feedback').insert({
       message_id: feedbackMessage.id,
       conversation_id: conversationId,
+      user_id: session.user.id,
       feedback: feedbackType,
       comment: feedbackComment,
     });
