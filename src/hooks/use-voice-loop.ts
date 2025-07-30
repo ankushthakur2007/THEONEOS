@@ -17,6 +17,7 @@ interface UseVoiceLoopReturn {
   isRecordingUser: boolean;
   isSpeakingAI: boolean;
   isThinkingAI: boolean;
+  isLoadingHistory: boolean;
   currentInterimText: string;
   aiResponseText: string;
   isRecognitionReady: boolean;
@@ -47,6 +48,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     processUserInput,
     isThinkingAI,
     messages,
+    isLoadingHistory,
   } = useAIInteraction(
     supabase,
     session,
@@ -210,6 +212,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     isRecordingUser,
     isSpeakingAI,
     isThinkingAI,
+    isLoadingHistory,
     currentInterimText: isVoiceLoopActive ? currentInterimText : csrCurrentInterimTranscript,
     aiResponseText,
     isRecognitionReady: csrIsReady,

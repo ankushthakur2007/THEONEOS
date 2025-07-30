@@ -12,6 +12,7 @@ interface UseAIInteractionReturn {
   isThinkingAI: boolean;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  isLoadingHistory: boolean;
 }
 
 export function useAIInteraction(
@@ -22,11 +23,18 @@ export function useAIInteraction(
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id) {
+      setIsLoadingHistory(false);
+      setMessages([]);
+      setConversationId(null);
+      return;
+    }
 
     const fetchInitialData = async () => {
+      setIsLoadingHistory(true);
       const { data: convData, error: convError } = await supabase
         .from('conversations')
         .select('id')
@@ -38,6 +46,7 @@ export function useAIInteraction(
       if (convError && convError.code !== 'PGRST116') {
         console.error("Error fetching conversation:", convError);
         toast.error("Could not load conversation history.");
+        setIsLoadingHistory(false);
         return;
       }
 
@@ -59,13 +68,23 @@ export function useAIInteraction(
           }));
           setMessages(formattedMessages);
         }
+      } else {
+        setMessages([]);
+        setConversationId(null);
       }
+      setIsLoadingHistory(false);
     };
 
     fetchInitialData();
   }, [session?.user?.id, supabase]);
 
   const processUserInput = useCallback(async (text: string): Promise<{ text: string; audioUrl: string | null }> => {
+    if (isLoadingHistory) {
+      const errorMessage = "Conversation history is still loading. Please wait a moment.";
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
+    }
+    
     setIsThinkingAI(true);
 
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
@@ -105,12 +124,13 @@ export function useAIInteraction(
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, speakAIResponse, conversationId]);
+  }, [supabase, speakAIResponse, conversationId, isLoadingHistory]);
 
   return {
     processUserInput,
     isThinkingAI,
     messages,
     setMessages,
+    isLoadingHistory,
   };
 }
