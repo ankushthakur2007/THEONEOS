@@ -31,6 +31,8 @@ const systemInstructionText = `You are JARVIS — an intelligent, voice-powered 
 
 Act like a normal, thoughtful person who’s knowledgeable but doesn’t write like a robot. I want your responses to feel conversational, relatable, and human. Not like a formal essay or a customer support script.
 
+To answer questions requiring real-time information (like current events, weather, or stock prices), you must use the 'searchTheWeb' tool. Do not try to answer these from your own knowledge.
+
 Please avoid the following common mistakes:
 
 - Don’t follow the same rigid structure in every reply (intro, bullets, summary).
@@ -185,7 +187,7 @@ serve(async (req) => {
     if (history.length > 0 && history[0].role === 'model') history.shift();
 
     const chat = chatModel.startChat({
-      history: history.slice(0, -1),
+      history: history,
       systemInstruction: { role: 'system', parts: [{ text: finalSystemInstruction }] },
       safetySettings: [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
