@@ -11,9 +11,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { LogOut, Mic, Send, User, Settings as SettingsIcon } from 'lucide-react';
+import { LogOut, Mic, Send, User, Settings as SettingsIcon, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { ConversationSidebar } from '@/components/ConversationSidebar';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const chatSchema = z.object({
   message: z.string(),
@@ -24,9 +27,22 @@ const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<{ first_name: string } | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [refreshSidebarKey, setRefreshSidebarKey] = useState(0);
+  const isMobile = useIsMobile();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
 
   const { speakAIResponse } = useTextToSpeech();
-  const { processUserInput, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(supabase, session, speakAIResponse);
+  const { processUserInput, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(
+    supabase,
+    session,
+    speakAIResponse,
+    selectedConversationId,
+    (id) => {
+      setSelectedConversationId(id);
+      setRefreshSidebarKey(prev => prev + 1); // Refresh sidebar when new chat is created
+    }
+  );
 
   const handleFinalTranscript = async (transcript: string) => {
     if (transcript) {
@@ -64,33 +80,66 @@ const Home: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchInitialData = async () => {
       if (session?.user) {
-        const { data, error } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('first_name')
           .eq('id', session.user.id)
           .single();
-        if (error && error.code !== 'PGRST116') {
-          console.error('Error fetching profile:', error);
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('Error fetching profile:', profileError);
         } else {
-          setProfile(data);
+          setProfile(profileData);
+        }
+
+        const { data: convData, error: convError } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (convError && convError.code !== 'PGRST116') {
+          console.error('Error fetching last conversation:', convError);
+        } else if (convData) {
+          setSelectedConversationId(convData.id);
         }
       }
     };
-    fetchProfile();
+    fetchInitialData();
   }, [session, supabase]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
 
+  const handleNewChat = () => {
+    setSelectedConversationId(null);
+    if (isMobile) setIsSidebarOpen(false);
+  };
+
+  const handleSelectConversation = (id: string) => {
+    setSelectedConversationId(id);
+    if (isMobile) setIsSidebarOpen(false);
+  };
+
+  useEffect(() => {
+    setIsSidebarOpen(!isMobile);
+  }, [isMobile]);
+
   const isThinking = isThinkingAI || isLoadingHistory;
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground animate-fade-in">
       <header className="p-4 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b">
-        <h1 className="text-xl font-bold">THEONEOS</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+            {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+          </Button>
+          <h1 className="text-xl font-bold">THEONEOS</h1>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -112,53 +161,72 @@ const Home: React.FC = () => {
         </DropdownMenu>
       </header>
 
-      <main className="flex-1 flex flex-col overflow-y-auto">
-        {messages.length === 0 && !isThinking ? (
-          <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
-              Hi {profile?.first_name || 'there'}, what should we dive into today?
-            </h2>
-          </div>
-        ) : (
-          <ChatInterface
-            messages={messages}
-            isThinking={isThinkingAI}
-            isLoadingHistory={isLoadingHistory}
-          />
+      <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        {isSidebarOpen && (
+          <>
+            <ResizablePanel defaultSize={20} minSize={15} maxSize={30} className="hidden md:block">
+              <ConversationSidebar
+                selectedConversationId={selectedConversationId}
+                onSelectConversation={handleSelectConversation}
+                onNewChat={handleNewChat}
+                refreshKey={refreshSidebarKey}
+              />
+            </ResizablePanel>
+            <ResizableHandle withHandle className="hidden md:flex" />
+          </>
         )}
-      </main>
-
-      <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 border-t bg-background">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
-            <FormField
-              control={form.control}
-              name="message"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <Input
-                      placeholder="Message JARVIS..."
-                      className="pr-20"
-                      {...field}
-                      disabled={isThinking || isListening}
-                      autoComplete="off"
-                    />
-                  </FormControl>
-                </FormItem>
+        <ResizablePanel defaultSize={80}>
+          <div className="flex flex-col h-full">
+            <main className="flex-1 flex flex-col overflow-y-auto">
+              {messages.length === 0 && !isThinking ? (
+                <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
+                    Hi {profile?.first_name || 'there'}, what should we dive into today?
+                  </h2>
+                </div>
+              ) : (
+                <ChatInterface
+                  messages={messages}
+                  isThinking={isThinkingAI}
+                  isLoadingHistory={isLoadingHistory}
+                />
               )}
-            />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
-                <Mic className={isListening ? "text-red-500" : ""} />
-              </Button>
-              <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening}>
-                <Send />
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </footer>
+            </main>
+
+            <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 bg-background">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
+                  <FormField
+                    control={form.control}
+                    name="message"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input
+                            placeholder="Message JARVIS..."
+                            className="pr-20"
+                            {...field}
+                            disabled={isThinking || isListening}
+                            autoComplete="off"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
+                      <Mic className={isListening ? "text-red-500" : ""} />
+                    </Button>
+                    <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening}>
+                      <Send />
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </footer>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 };

@@ -23,64 +23,49 @@ export function useAIInteraction(
   supabase: SupabaseClient,
   session: Session | null,
   speakAIResponse: (text: string) => Promise<string | null>,
+  conversationId: string | null,
+  setConversationId: (id: string | null) => void,
 ): UseAIInteractionReturn {
   const [isThinkingAI, setIsThinkingAI] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   useEffect(() => {
     if (!session?.user?.id) {
       setIsLoadingHistory(false);
       setMessages([]);
-      setConversationId(null);
       return;
     }
 
-    const fetchInitialData = async () => {
-      setIsLoadingHistory(true);
-      const { data: convData, error: convError } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (convError && convError.code !== 'PGRST116') {
-        console.error("Error fetching conversation:", convError);
-        toast.error("Could not load conversation history.");
+    const fetchMessages = async () => {
+      if (!conversationId) {
+        setMessages([]);
         setIsLoadingHistory(false);
         return;
       }
 
-      if (convData) {
-        setConversationId(convData.id);
-        const { data: messagesData, error: messagesError } = await supabase
-          .from('messages')
-          .select('role, content')
-          .eq('conversation_id', convData.id)
-          .order('created_at', { ascending: true });
-        
-        if (messagesError) {
-          console.error("Error fetching messages:", messagesError);
-          toast.error("Could not load messages for the conversation.");
-        } else if (messagesData) {
-          const formattedMessages = messagesData.map(msg => ({
-            role: msg.role as 'user' | 'model',
-            parts: [{ text: msg.content }],
-          }));
-          setMessages(formattedMessages);
-        }
-      } else {
-        setMessages([]);
-        setConversationId(null);
+      setIsLoadingHistory(true);
+      const { data: messagesData, error: messagesError } = await supabase
+        .from('messages')
+        .select('role, content')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+      
+      if (messagesError) {
+        console.error("Error fetching messages:", messagesError);
+        toast.error("Could not load messages for the conversation.");
+      } else if (messagesData) {
+        const formattedMessages = messagesData.map(msg => ({
+          role: msg.role as 'user' | 'model',
+          parts: [{ text: msg.content }],
+        }));
+        setMessages(formattedMessages);
       }
       setIsLoadingHistory(false);
     };
 
-    fetchInitialData();
-  }, [session?.user?.id, supabase]);
+    fetchMessages();
+  }, [session?.user?.id, supabase, conversationId]);
 
   const processUserInput = useCallback(async (text: string, options: ProcessUserInputOptions = { speak: false }): Promise<{ text: string; audioUrl: string | null }> => {
     setIsThinkingAI(true);
@@ -125,7 +110,7 @@ export function useAIInteraction(
     } finally {
       setIsThinkingAI(false);
     }
-  }, [supabase, speakAIResponse, conversationId]);
+  }, [supabase, speakAIResponse, conversationId, setConversationId]);
 
   return {
     processUserInput,
