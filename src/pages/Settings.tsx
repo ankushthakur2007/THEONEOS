@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
 interface Profile {
@@ -25,7 +25,7 @@ const Settings: React.FC = () => {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [preferences, setPreferences] = useState<Preferences>({ ai_personality: 'default' });
+  const [preferences, setPreferences] = useState<Preferences>({ ai_personality: 'A helpful and friendly assistant.' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -55,7 +55,10 @@ const Settings: React.FC = () => {
         if (prefsError && prefsError.code !== 'PGRST116') {
           console.error('Error fetching preferences:', prefsError);
         } else if (prefsData) {
-          setPreferences(prefsData.prefs as Preferences);
+          const userPrefs = prefsData.prefs as Partial<Preferences>;
+          setPreferences({
+            ai_personality: userPrefs.ai_personality || 'A helpful and friendly assistant.',
+          });
         }
 
         setLoading(false);
@@ -133,25 +136,24 @@ const Settings: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="ai-personality">AI Personality</Label>
                   <p className="text-sm text-muted-foreground">
-                    Choose how you want JARVIS to respond.
+                    Describe how you want JARVIS to respond. Keep it brief (max 500 characters).
                   </p>
                   {loading ? (
-                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-24 w-full" />
                   ) : (
-                    <Select
-                      value={preferences.ai_personality}
-                      onValueChange={(value) => setPreferences(p => ({ ...p, ai_personality: value }))}
-                    >
-                      <SelectTrigger id="ai-personality">
-                        <SelectValue placeholder="Select a personality" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Default (Helpful Assistant)</SelectItem>
-                        <SelectItem value="witty">Witty & Sarcastic</SelectItem>
-                        <SelectItem value="formal">Formal & Professional</SelectItem>
-                        <SelectItem value="pirate">A Swashbuckling Pirate</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div>
+                      <Textarea
+                        id="ai-personality"
+                        placeholder="e.g., A witty and slightly sarcastic assistant, like Chandler from Friends."
+                        value={preferences.ai_personality}
+                        onChange={(e) => setPreferences(p => ({ ...p, ai_personality: e.target.value }))}
+                        maxLength={500}
+                        className="min-h-[100px]"
+                      />
+                      <p className="text-sm text-muted-foreground text-right mt-1">
+                        {preferences.ai_personality.length} / 500
+                      </p>
+                    </div>
                   )}
                 </div>
                 <Button onClick={handleSaveChanges} disabled={saving || loading}>

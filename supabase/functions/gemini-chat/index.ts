@@ -66,7 +66,7 @@ serve(async (req) => {
       .single();
 
     if (prefsError && prefsError.code !== 'PGRST116') throw prefsError;
-    const personality = (prefsData?.prefs as any)?.ai_personality || 'default';
+    const personality = (prefsData?.prefs as any)?.ai_personality || 'A helpful and friendly assistant.';
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const chatModel = genAI.getGenerativeModel({ model: "gemini-pro" });
