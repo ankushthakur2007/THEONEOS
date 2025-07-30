@@ -43,8 +43,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   return (
-    <ScrollArea className="w-full max-w-3xl mx-auto flex-grow" ref={scrollAreaRef} viewportRef={viewportRef}>
-      <div className="p-4 space-y-6">
+    <ScrollArea className="w-full flex-grow" ref={scrollAreaRef} viewportRef={viewportRef}>
+      <div className="p-4 space-y-6 max-w-3xl mx-auto w-full">
         {isLoadingHistory ? (
           <div className="space-y-4">
             <Skeleton className="h-16 w-3/4 animate-pulse" />
