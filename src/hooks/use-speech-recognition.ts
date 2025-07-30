@@ -21,6 +21,7 @@ export function useSpeechRecognition({
   const [isReady, setIsReady] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const finalTranscriptRef = useRef<string>('');
+  const manualStopRef = useRef<boolean>(false);
 
   const handleResult = useCallback((event: SpeechRecognitionEvent) => {
     let interimTranscript = '';
@@ -35,15 +36,25 @@ export function useSpeechRecognition({
   }, [onTranscriptChange]);
 
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
+    if (event.error === 'no-speech' || event.error === 'audio-capture') {
+      return; // Ignore common errors that can occur during continuous listening
+    }
     console.error('Speech recognition error:', event.error);
     if (onError) {
       onError(event.error);
     }
+    manualStopRef.current = true;
     setIsListening(false);
   }, [onError]);
 
   const handleEnd = useCallback(() => {
-    setIsListening(false);
+    if (manualStopRef.current) {
+      setIsListening(false);
+    } else {
+      // If the session ended automatically (e.g., browser timeout), restart it
+      // to maintain the continuous listening experience.
+      recognitionRef.current?.start();
+    }
   }, []);
 
   const startListening = useCallback(async () => {
@@ -51,8 +62,11 @@ export function useSpeechRecognition({
 
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
-      finalTranscriptRef.current = ''; // Reset transcript on start
-      onTranscriptChange('');
+      
+      finalTranscriptRef.current = '';
+      manualStopRef.current = false;
+      onTranscriptChange(''); // Clear previous transcript
+      
       recognitionRef.current.start();
       setIsListening(true);
     } catch (err: any) {
@@ -67,19 +81,20 @@ export function useSpeechRecognition({
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current && isListening) {
+      manualStopRef.current = true;
       recognitionRef.current.stop();
     }
   }, [isListening]);
 
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    const SpeechRecognitionAPI = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
       toast.error("Speech recognition not supported in this browser.");
       setIsReady(false);
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognitionAPI();
     recognitionRef.current = recognition;
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -92,9 +107,8 @@ export function useSpeechRecognition({
     setIsReady(true);
 
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      manualStopRef.current = true;
+      recognitionRef.current?.stop();
     };
   }, [handleResult, handleError, handleEnd]);
 
