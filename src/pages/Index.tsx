@@ -4,7 +4,7 @@ import { useSession } from '@/components/SessionContextProvider';
 
 const Index: React.FC = () => {
   const navigate = useNavigate();
-  const { session, supabase } = useSession(); // Use the session from context
+  const { session } = useSession(); // Use the session from context
 
   useEffect(() => {
     // SessionContextProvider already handles initial redirects and auth state changes.
