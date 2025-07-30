@@ -68,9 +68,11 @@ const Home: React.FC = () => {
   });
 
   const handleTextSubmit = async (values: ChatFormValues) => {
+    // Stop listening if the user submits text while the mic is on
     if (isListening) {
       stopListening();
     }
+    // Process the text if there is any
     if (values.message.trim()) {
       await processUserInput(values.message.trim());
       form.reset({ message: '' });
@@ -80,7 +82,13 @@ const Home: React.FC = () => {
   const handleMicClick = () => {
     if (isListening) {
       stopListening();
+      // After stopping, if there's a transcript, submit it.
+      const currentTranscript = form.getValues('message');
+      if (currentTranscript.trim()) {
+        handleTextSubmit({ message: currentTranscript });
+      }
     } else {
+      // Before starting, clear any previous text.
       form.reset({ message: '' });
       startListening();
     }
