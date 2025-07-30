@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.15.0";
 
 const corsHeaders = {
@@ -6,29 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    // Destructure prompt and history from the request body
-    const { prompt, history } = await req.json();
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-
-    if (!geminiApiKey) {
-      console.error('GEMINI_API_KEY not set in environment variables.');
-      return new Response(JSON.stringify({ error: 'Gemini API key not set.' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      });
-    }
-
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-    // Define the system instruction for tool awareness
-    const systemInstructionText = `You are JARVIS — an intelligent, voice-powered assistant who talks to users and can optionally use external tools.
+const systemInstructionText = `You are JARVIS — an intelligent, voice-powered assistant who talks to users and can optionally use external tools.
 
 You must always:
 - Think before responding
@@ -76,25 +55,118 @@ Search if needed
 
 Otherwise, reply naturally`;
 
-    // Start a chat session with the provided history and system instruction
-    const chat = model.startChat({
-      history: history || [], // Use provided history, or an empty array if none
-      generationConfig: {
-        maxOutputTokens: 200, // Limit output length to prevent excessively long responses
-      },
-      // Correctly format systemInstruction as a Content object
-      systemInstruction: {
-        role: 'system',
-        parts: [{ text: systemInstructionText }],
-      },
+async function runSearchTool(query: string): Promise<string> {
+  const serperApiKey = Deno.env.get("SERPER_API_KEY");
+  if (!serperApiKey) {
+    console.error('SERPER_API_KEY not set.');
+    return "Search tool is not configured.";
+  }
+  const res = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: { "X-API-KEY": serperApiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ q: query }),
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('Serper.dev API error:', errorText);
+    return "I couldn't find anything helpful online.";
+  }
+  const data = await res.json();
+  return data.answerBox?.answer || data.answerBox?.snippet || data.organic?.[0]?.snippet || "I couldn't find anything helpful online.";
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { prompt, conversationId: initialConversationId } = await req.json();
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+
+    if (!geminiApiKey) {
+      throw new Error('Gemini API key not set.');
+    }
+
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    const authHeader = req.headers.get('Authorization')!;
+    const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (!user) {
+      throw new Error('User not authenticated.');
+    }
+
+    let conversationId = initialConversationId;
+
+    if (!conversationId) {
+      const { data: newConversation, error: convError } = await supabaseAdmin
+        .from('conversations')
+        .insert({ user_id: user.id, title: prompt.substring(0, 50) })
+        .select('id')
+        .single();
+      
+      if (convError) throw convError;
+      conversationId = newConversation.id;
+    }
+
+    await supabaseAdmin.from('messages').insert({
+      conversation_id: conversationId,
+      role: 'user',
+      content: prompt,
     });
 
-    // Send the current prompt
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from('messages')
+      .select('role, content')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (messagesError) throw messagesError;
+
+    const history = messages.reverse().map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }],
+    }));
+
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    const chat = model.startChat({
+      history: history.slice(0, -1),
+      systemInstruction: { role: 'system', parts: [{ text: systemInstructionText }] },
+    });
+
     const result = await chat.sendMessage(prompt);
     const response = await result.response;
-    const text = response.text();
+    let aiText = response.text();
 
-    return new Response(JSON.stringify({ text }), {
+    const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/;
+    const match = aiText.match(jsonBlockRegex);
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        if (parsed.tool === "www.go.io" && parsed.params?.query) {
+          const searchResult = await runSearchTool(parsed.params.query);
+          const summarizePrompt = `Based on the user's question "${prompt}", summarize the following search result in a conversational way: ${searchResult}`;
+          const summaryResult = await chat.sendMessage(summarizePrompt);
+          aiText = (await summaryResult.response).text();
+        }
+      } catch (e) { /* Not a valid JSON, treat as regular text */ }
+    }
+
+    await supabaseAdmin.from('messages').insert({
+      conversation_id: conversationId,
+      role: 'model',
+      content: aiText,
+    });
+    
+    await supabaseAdmin.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
+
+    return new Response(JSON.stringify({ text: aiText, conversationId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

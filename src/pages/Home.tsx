@@ -18,7 +18,6 @@ const Home: React.FC = () => {
     isRecordingUser,
     isSpeakingAI,
     isThinkingAI,
-    isSearchingAI,
     currentInterimText,
     aiResponseText,
   } = useVoiceLoop(supabase, session);
@@ -27,7 +26,7 @@ const Home: React.FC = () => {
     await supabase.auth.signOut();
   };
 
-  const isThinking = isThinkingAI || isSearchingAI;
+  const isThinking = isThinkingAI;
   const displayText = isSpeakingAI ? aiResponseText : currentInterimText;
 
   return (
