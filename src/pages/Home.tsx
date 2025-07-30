@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSession } from '@/components/SessionContextProvider';
 import { useAIInteraction } from '@/hooks/use-ai-interaction';
-import { useContinuousSpeechRecognition } from '@/hooks/use-continuous-speech-recognition';
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,30 +53,27 @@ const Home: React.FC = () => {
     }
   );
 
-  const handleFinalTranscript = async (transcript: string) => {
-    if (transcript) {
-      form.setValue('message', transcript);
-      await processUserInput(transcript);
-      form.reset();
-    }
-  };
-
-  const { startListening, stopListening, isListening } = useContinuousSpeechRecognition(
-    handleFinalTranscript,
-    (error) => {
-      toast.error(`Voice input error: ${error}`);
-    }
-  );
-
   const form = useForm<ChatFormValues>({
     resolver: zodResolver(chatSchema),
     defaultValues: { message: '' },
   });
 
+  const { startListening, stopListening, isListening } = useSpeechRecognition({
+    onTranscriptChange: (transcript) => {
+      form.setValue('message', transcript, { shouldValidate: true });
+    },
+    onError: (error) => {
+      toast.error(`Voice input error: ${error}`);
+    },
+  });
+
   const handleTextSubmit = async (values: ChatFormValues) => {
-    if (values.message) {
-      await processUserInput(values.message);
-      form.reset();
+    if (isListening) {
+      stopListening();
+    }
+    if (values.message.trim()) {
+      await processUserInput(values.message.trim());
+      form.reset({ message: '' });
     }
   };
 
@@ -84,6 +81,7 @@ const Home: React.FC = () => {
     if (isListening) {
       stopListening();
     } else {
+      form.reset({ message: '' });
       startListening();
     }
   };

@@ -1,45 +1,49 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
+interface UseSpeechRecognitionOptions {
+  onTranscriptChange: (transcript: string) => void;
+  onError?: (error: string) => void;
+}
+
 interface UseSpeechRecognitionReturn {
   startListening: () => void;
   stopListening: () => void;
   isListening: boolean;
-  transcript: string;
   isReady: boolean;
 }
 
-export function useContinuousSpeechRecognition(
-  onFinalTranscript: (transcript: string) => void,
-  onError: (error: string) => void
-): UseSpeechRecognitionReturn {
+export function useSpeechRecognition({
+  onTranscriptChange,
+  onError,
+}: UseSpeechRecognitionOptions): UseSpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalTranscriptRef = useRef<string>('');
 
   const handleResult = useCallback((event: SpeechRecognitionEvent) => {
-    let finalTranscript = '';
+    let interimTranscript = '';
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       if (event.results[i].isFinal) {
-        finalTranscript += event.results[i][0].transcript;
+        finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+      } else {
+        interimTranscript += event.results[i][0].transcript;
       }
     }
-    setTranscript(finalTranscript);
-    if (finalTranscript) {
-      onFinalTranscript(finalTranscript.trim());
-    }
-  }, [onFinalTranscript]);
+    onTranscriptChange(finalTranscriptRef.current + interimTranscript);
+  }, [onTranscriptChange]);
 
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
     console.error('Speech recognition error:', event.error);
-    onError(event.error);
+    if (onError) {
+      onError(event.error);
+    }
     setIsListening(false);
   }, [onError]);
 
   const handleEnd = useCallback(() => {
     setIsListening(false);
-    console.log("Speech recognition ended.");
   }, []);
 
   const startListening = useCallback(async () => {
@@ -47,22 +51,24 @@ export function useContinuousSpeechRecognition(
 
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
-      setTranscript('');
+      finalTranscriptRef.current = ''; // Reset transcript on start
+      onTranscriptChange('');
       recognitionRef.current.start();
       setIsListening(true);
     } catch (err: any) {
       console.error("Microphone access denied:", err);
       toast.error("Microphone access denied. Please enable it in your browser settings.");
-      onError(`Microphone access denied: ${err.name || err.message}`);
+      if (onError) {
+        onError(`Microphone access denied: ${err.name || err.message}`);
+      }
       setIsListening(false);
     }
-  }, [isListening, onError]);
+  }, [isListening, onError, onTranscriptChange]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
     }
-    setIsListening(false);
   }, [isListening]);
 
   useEffect(() => {
@@ -75,8 +81,8 @@ export function useContinuousSpeechRecognition(
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onresult = handleResult;
@@ -92,5 +98,5 @@ export function useContinuousSpeechRecognition(
     };
   }, [handleResult, handleError, handleEnd]);
 
-  return { startListening, stopListening, isListening, transcript, isReady };
+  return { startListening, stopListening, isListening, isReady };
 }
