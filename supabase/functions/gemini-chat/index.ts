@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const systemInstructionText = `You are JARVIS — an intelligent, voice-powered assistant who talks to users and can optionally use external tools.
+Your personality should be: {{personality}}.
 
 You must always:
 - Think before responding
@@ -100,6 +101,18 @@ serve(async (req) => {
     const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
     if (!user) throw new Error('User not authenticated.');
 
+    const { data: prefsData, error: prefsError } = await supabaseAdmin
+      .from('user_preferences')
+      .select('prefs')
+      .eq('user_id', user.id)
+      .single();
+
+    if (prefsError && prefsError.code !== 'PGRST116') {
+      throw prefsError;
+    }
+
+    const personality = (prefsData?.prefs as any)?.ai_personality || 'default';
+
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const chatModel = genAI.getGenerativeModel({ model: "gemini-pro" });
     const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
@@ -120,7 +133,8 @@ serve(async (req) => {
       ? memories.map((m: any) => `- ${m.memory_text}`).join('\n')
       : 'No relevant memories found.';
 
-    const finalSystemInstruction = systemInstructionText.replace('{{memories}}', memoryText);
+    let finalSystemInstruction = systemInstructionText.replace('{{memories}}', memoryText);
+    finalSystemInstruction = finalSystemInstruction.replace('{{personality}}', personality);
 
     // --- REASON ---
     let conversationId = initialConversationId;

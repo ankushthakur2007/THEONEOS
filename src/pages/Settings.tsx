@@ -8,10 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 
 interface Profile {
   first_name: string;
   last_name: string;
+}
+
+interface Preferences {
+  ai_personality: string;
 }
 
 const Settings: React.FC = () => {
@@ -19,29 +25,60 @@ const Settings: React.FC = () => {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [preferences, setPreferences] = useState<Preferences>({ ai_personality: 'default' });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchInitialData = async () => {
       if (session?.user) {
         setLoading(true);
-        const { data, error } = await supabase
+        
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('first_name, last_name')
           .eq('id', session.user.id)
           .single();
 
-        if (error) {
-          console.error('Error fetching profile:', error);
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
         } else {
-          setProfile(data);
+          setProfile(profileData);
         }
+
+        const { data: prefsData, error: prefsError } = await supabase
+          .from('user_preferences')
+          .select('prefs')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (prefsError && prefsError.code !== 'PGRST116') {
+          console.error('Error fetching preferences:', prefsError);
+        } else if (prefsData) {
+          setPreferences(prefsData.prefs as Preferences);
+        }
+
         setLoading(false);
       }
     };
 
-    fetchProfile();
+    fetchInitialData();
   }, [session, supabase]);
+
+  const handleSaveChanges = async () => {
+    if (!session?.user) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('user_preferences')
+      .upsert({ user_id: session.user.id, prefs: preferences }, { onConflict: 'user_id' });
+
+    if (error) {
+      toast.error(`Failed to save preferences: ${error.message}`);
+    } else {
+      toast.success('Preferences saved successfully!');
+    }
+    setSaving(false);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8 animate-fade-in">
@@ -87,6 +124,39 @@ const Settings: React.FC = () => {
                   checked={theme === 'dark'}
                   onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
                 />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">AI Customization</h3>
+              <div className="rounded-lg border p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ai-personality">AI Personality</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Choose how you want JARVIS to respond.
+                  </p>
+                  {loading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <Select
+                      value={preferences.ai_personality}
+                      onValueChange={(value) => setPreferences(p => ({ ...p, ai_personality: value }))}
+                    >
+                      <SelectTrigger id="ai-personality">
+                        <SelectValue placeholder="Select a personality" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default (Helpful Assistant)</SelectItem>
+                        <SelectItem value="witty">Witty & Sarcastic</SelectItem>
+                        <SelectItem value="formal">Formal & Professional</SelectItem>
+                        <SelectItem value="pirate">A Swashbuckling Pirate</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button onClick={handleSaveChanges} disabled={saving || loading}>
+                  {saving ? 'Saving...' : 'Save Preferences'}
+                </Button>
               </div>
             </div>
           </CardContent>
