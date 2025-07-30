@@ -88,8 +88,8 @@ const Home: React.FC = () => {
   const isThinking = isThinkingAI || isLoadingHistory;
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden animate-fade-in">
-      <header className="p-4 flex justify-between items-center absolute top-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-sm">
+    <div className="flex flex-col h-screen bg-background text-foreground animate-fade-in">
+      <header className="p-4 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b">
         <h1 className="text-xl font-bold">THEONEOS</h1>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -112,10 +112,10 @@ const Home: React.FC = () => {
         </DropdownMenu>
       </header>
 
-      <main className="flex-grow flex flex-col justify-end pt-16 pb-4">
+      <main className="flex-1 flex flex-col overflow-y-auto">
         {messages.length === 0 && !isThinking ? (
-          <div className="text-center flex-grow flex flex-col justify-center items-center">
-            <h2 className="text-4xl font-bold">
+          <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
               Hi {profile?.first_name || 'there'}, what should we dive into today?
             </h2>
           </div>
@@ -128,7 +128,7 @@ const Home: React.FC = () => {
         )}
       </main>
 
-      <footer className="p-4 w-full max-w-3xl mx-auto">
+      <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 border-t bg-background">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
             <FormField
