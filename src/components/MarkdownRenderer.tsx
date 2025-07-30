@@ -16,11 +16,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, inline, className, children, ...props }) {
+          code({ node, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
-            return !inline && match ? (
+            return match ? (
               <SyntaxHighlighter
-                style={codeTheme}
+                style={codeTheme as any}
                 language={match[1]}
                 PreTag="div"
                 {...props}
@@ -28,7 +28,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (
-              <code className="font-mono text-sm bg-muted px-1 py-0.5 rounded" {...props}>
+              <code className={className} {...props}>
                 {children}
               </code>
             );
