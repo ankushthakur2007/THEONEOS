@@ -183,10 +183,15 @@ serve(async (req) => {
       .order('created_at', { ascending: false }).limit(10);
     if (messagesError) throw messagesError;
 
-    const history = messages.reverse().map(msg => ({
+    let history = messages.reverse().map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content }],
     }));
+
+    // Ensure the history starts with a user message
+    if (history.length > 0 && history[0].role === 'model') {
+      history.shift();
+    }
 
     const chat = chatModel.startChat({
       history: history.slice(0, -1),
