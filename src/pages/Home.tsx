@@ -1,51 +1,96 @@
 import React, { useState, useEffect } from 'react';
 import { useSession } from '@/components/SessionContextProvider';
-import { useVoiceLoop } from '@/hooks/use-voice-loop';
-import { JarvisSphere } from '@/components/JarvisSphere';
+import { useAIInteraction } from '@/hooks/use-ai-interaction';
+import { useTextToSpeech } from '@/hooks/use-text-to-speech';
+import { useContinuousSpeechRecognition } from '@/hooks/use-continuous-speech-recognition';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { LogOut, Mic, Square, User, Settings as SettingsIcon, MessageSquare } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { LogOut, Mic, Send, User, Settings as SettingsIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+
+const chatSchema = z.object({
+  message: z.string(),
+});
+type ChatFormValues = z.infer<typeof chatSchema>;
 
 const Home: React.FC = () => {
   const { supabase, session } = useSession();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'voice' | 'chat'>('voice');
-  
-  const {
-    isVoiceLoopActive,
-    startVoiceLoop,
-    stopVoiceLoop,
-    isRecordingUser,
-    isSpeakingAI,
-    isThinkingAI,
-    isLoadingHistory,
-    currentInterimText,
-    aiResponseText,
-    messages,
-    processUserInput,
-  } = useVoiceLoop(supabase, session);
+  const [profile, setProfile] = useState<{ first_name: string } | null>(null);
+
+  const { speakAIResponse } = useTextToSpeech();
+  const { processUserInput, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(supabase, session, speakAIResponse);
+
+  const handleFinalTranscript = async (transcript: string) => {
+    if (transcript) {
+      form.setValue('message', transcript);
+      await processUserInput(transcript, { speak: true });
+      form.reset();
+    }
+  };
+
+  const { startListening, stopListening, isListening } = useContinuousSpeechRecognition(
+    handleFinalTranscript,
+    (error) => {
+      toast.error(`Voice input error: ${error}`);
+    }
+  );
+
+  const form = useForm<ChatFormValues>({
+    resolver: zodResolver(chatSchema),
+    defaultValues: { message: '' },
+  });
+
+  const handleTextSubmit = async (values: ChatFormValues) => {
+    if (values.message) {
+      await processUserInput(values.message, { speak: false });
+      form.reset();
+    }
+  };
+
+  const handleMicClick = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
 
   useEffect(() => {
-    if (mode === 'chat' && isVoiceLoopActive) {
-      stopVoiceLoop();
-    }
-  }, [mode, isVoiceLoopActive, stopVoiceLoop]);
+    const fetchProfile = async () => {
+      if (session?.user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('first_name')
+          .eq('id', session.user.id)
+          .single();
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching profile:', error);
+        } else {
+          setProfile(data);
+        }
+      }
+    };
+    fetchProfile();
+  }, [session, supabase]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
 
   const isThinking = isThinkingAI || isLoadingHistory;
-  const displayText = isLoadingHistory ? "Loading conversation..." : (isSpeakingAI ? aiResponseText : currentInterimText);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden animate-fade-in">
       <header className="p-4 flex justify-between items-center absolute top-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-sm">
-        <h1 className="text-xl font-bold">JARVIS</h1>
+        <h1 className="text-xl font-bold">THEONEOS</h1>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -67,60 +112,52 @@ const Home: React.FC = () => {
         </DropdownMenu>
       </header>
 
-      <main className="flex-grow flex flex-col items-center justify-center text-center pt-16 pb-32">
-        {mode === 'voice' ? (
-          <div className="flex flex-col items-center justify-center space-y-6">
-            <JarvisSphere
-              isRecordingUser={isRecordingUser}
-              isThinking={isThinking}
-              isSpeaking={isSpeakingAI}
-            />
-            <div className="min-h-[6rem] w-full max-w-3xl flex items-center justify-center p-4">
-              <p className={cn(
-                "text-2xl md:text-3xl font-medium transition-opacity duration-300",
-                displayText ? "opacity-100" : "opacity-0"
-              )}>
-                {displayText || "..."}
-              </p>
-            </div>
+      <main className="flex-grow flex flex-col justify-end pt-16 pb-4">
+        {messages.length === 0 && !isThinking ? (
+          <div className="text-center flex-grow flex flex-col justify-center items-center">
+            <h2 className="text-4xl font-bold">
+              Hi {profile?.first_name || 'there'}, what should we dive into today?
+            </h2>
           </div>
         ) : (
           <ChatInterface
             messages={messages}
-            processUserInput={processUserInput}
-            isThinking={isThinking}
+            isThinking={isThinkingAI}
             isLoadingHistory={isLoadingHistory}
           />
         )}
       </main>
 
-      <footer className="p-4 flex flex-col items-center space-y-4 absolute bottom-0 left-0 right-0 z-10">
-        {mode === 'voice' && (
-          <Button
-            size="lg"
-            className="rounded-full w-16 h-16"
-            onClick={isVoiceLoopActive ? stopVoiceLoop : startVoiceLoop}
-            disabled={isThinking}
-          >
-            {isVoiceLoopActive ? <Square className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-          </Button>
-        )}
-        <ToggleGroup
-          type="single"
-          value={mode}
-          onValueChange={(value) => {
-            if (value) setMode(value as 'voice' | 'chat');
-          }}
-          className="bg-muted p-1 rounded-full shadow-md"
-          disabled={isThinking}
-        >
-          <ToggleGroupItem value="voice" aria-label="Voice mode">
-            <Mic className="h-4 w-4" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="chat" aria-label="Chat mode">
-            <MessageSquare className="h-4 w-4" />
-          </ToggleGroupItem>
-        </ToggleGroup>
+      <footer className="p-4 w-full max-w-3xl mx-auto">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
+            <FormField
+              control={form.control}
+              name="message"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input
+                      placeholder="Message JARVIS..."
+                      className="pr-20"
+                      {...field}
+                      disabled={isThinking || isListening}
+                      autoComplete="off"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
+                <Mic className={isListening ? "text-red-500" : ""} />
+              </Button>
+              <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening}>
+                <Send />
+              </Button>
+            </div>
+          </form>
+        </Form>
       </footer>
     </div>
   );
