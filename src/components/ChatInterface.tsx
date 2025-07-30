@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -25,25 +25,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  // Get the text of the last message to use as a dependency.
-  // This ensures we scroll every time the content of the last message changes (e.g., streaming).
   const lastMessageText = messages.length > 0 ? messages[messages.length - 1].parts[0].text : '';
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (viewport) {
-      // The `setTimeout` ensures this runs after the DOM has been updated with the new message,
-      // making the scroll behavior more reliable.
-      const timer = setTimeout(() => {
-        viewport.scrollTo({
-          top: viewport.scrollHeight,
-          behavior: 'smooth',
-        });
-      }, 100);
-
-      return () => clearTimeout(timer);
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior: 'smooth',
+      });
     }
-  }, [messages, lastMessageText]); // Depend on the messages array and the last message's content
+  }, [messages, lastMessageText]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
