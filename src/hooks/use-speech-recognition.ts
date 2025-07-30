@@ -20,53 +20,40 @@ export function useSpeechRecognition({
   const [isListening, setIsListening] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const finalTranscriptRef = useRef<string>('');
-  const manualStopRef = useRef<boolean>(false);
 
   const handleResult = useCallback((event: SpeechRecognitionEvent) => {
     let interimTranscript = '';
-    for (let i = event.resultIndex; i < event.results.length; ++i) {
+    let finalTranscript = '';
+    for (let i = 0; i < event.results.length; ++i) {
       if (event.results[i].isFinal) {
-        finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+        finalTranscript += event.results[i][0].transcript + ' ';
       } else {
         interimTranscript += event.results[i][0].transcript;
       }
     }
-    onTranscriptChange(finalTranscriptRef.current + interimTranscript);
+    onTranscriptChange(finalTranscript + interimTranscript);
   }, [onTranscriptChange]);
 
   const handleError = useCallback((event: SpeechRecognitionErrorEvent) => {
     if (event.error === 'no-speech' || event.error === 'audio-capture') {
-      return; // Ignore common errors that can occur during continuous listening
+      return; // Ignore common, non-critical errors.
     }
     console.error('Speech recognition error:', event.error);
     if (onError) {
       onError(event.error);
     }
-    manualStopRef.current = true;
-    setIsListening(false);
   }, [onError]);
 
   const handleEnd = useCallback(() => {
-    if (manualStopRef.current) {
-      setIsListening(false);
-    } else {
-      // If the session ended automatically (e.g., browser timeout), restart it
-      // to maintain the continuous listening experience.
-      recognitionRef.current?.start();
-    }
+    setIsListening(false);
   }, []);
 
   const startListening = useCallback(async () => {
-    if (!recognitionRef.current || isListening) return;
+    if (isListening || !recognitionRef.current) return;
 
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      finalTranscriptRef.current = '';
-      manualStopRef.current = false;
-      onTranscriptChange(''); // Clear previous transcript
-      
+      onTranscriptChange('');
       recognitionRef.current.start();
       setIsListening(true);
     } catch (err: any) {
@@ -75,15 +62,13 @@ export function useSpeechRecognition({
       if (onError) {
         onError(`Microphone access denied: ${err.name || err.message}`);
       }
-      setIsListening(false);
     }
   }, [isListening, onError, onTranscriptChange]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      manualStopRef.current = true;
-      recognitionRef.current.stop();
-    }
+    if (!isListening || !recognitionRef.current) return;
+    recognitionRef.current.stop();
+    // The 'onend' event will fire, which calls handleEnd to set isListening to false.
   }, [isListening]);
 
   useEffect(() => {
@@ -107,8 +92,7 @@ export function useSpeechRecognition({
     setIsReady(true);
 
     return () => {
-      manualStopRef.current = true;
-      recognitionRef.current?.stop();
+      recognitionRef.current?.abort();
     };
   }, [handleResult, handleError, handleEnd]);
 
