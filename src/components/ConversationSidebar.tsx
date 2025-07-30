@@ -70,12 +70,14 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
                 key={conv.id}
                 variant="ghost"
                 className={cn(
-                  'w-full justify-start truncate',
+                  'w-full justify-start h-auto py-2',
                   selectedConversationId === conv.id && 'bg-accent text-accent-foreground'
                 )}
                 onClick={() => onSelectConversation(conv.id)}
               >
-                {conv.title || 'Untitled Chat'}
+                <span className="truncate block text-left">
+                  {conv.title || 'Untitled Chat'}
+                </span>
               </Button>
             ))
           )}
