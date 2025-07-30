@@ -11,6 +11,7 @@ import Settings from "./pages/Settings";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { SessionContextProvider } from "./components/SessionContextProvider";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { Analytics } from "@vercel/analytics/react";
 
 const queryClient = new QueryClient();
 
@@ -18,6 +19,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <Analytics />
         <Toaster />
         <Sonner />
         <BrowserRouter>
