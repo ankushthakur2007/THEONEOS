@@ -173,14 +173,16 @@ const Home: React.FC = () => {
       <main className="flex-1 flex flex-col overflow-y-auto">
         {messages.length === 0 && !isThinking ? (
           <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
-              Hi {profile?.first_name || 'there'}, what should we dive into today?
-            </h2>
+            <h1 className="text-5xl font-bold mb-4 text-primary">
+              THEONEOS
+            </h1>
+            <p className="text-xl text-muted-foreground">
+              How can I help you today, {profile?.first_name || 'there'}?
+            </p>
           </div>
         ) : (
           <ChatInterface
             messages={messages}
-            isThinking={isThinkingAI}
             isLoadingHistory={isLoadingHistory}
           />
         )}
@@ -197,7 +199,7 @@ const Home: React.FC = () => {
                   <FormControl>
                     <Input
                       placeholder="Message JARVIS..."
-                      className="pr-20"
+                      className="w-full rounded-full py-6 pl-6 pr-24 bg-muted border-muted-foreground/20 focus-visible:ring-primary"
                       {...field}
                       disabled={isThinking || isListening}
                       autoComplete="off"
@@ -206,11 +208,11 @@ const Home: React.FC = () => {
                 </FormItem>
               )}
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1">
               <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
                 <Mic className={isListening ? "text-red-500" : ""} />
               </Button>
-              <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening}>
+              <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening || !form.watch('message')}>
                 <Send />
               </Button>
             </div>
