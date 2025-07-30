@@ -30,7 +30,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
   const isVoiceLoopActiveRef = useRef(isVoiceLoopActive);
 
   const [isRecordingUser, setIsRecordingUser] = useState(false);
-  const [currentInterimText, setCurrentInterimTranscript] = useState('');
+  const [currentInterimText, setCurrentInterimText] = useState('');
 
   const userCommandQueueRef = useRef<string[]>([]);
   const resolveUserCommandRef = useRef<((value: string) => void) | null>(null);
@@ -85,7 +85,6 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     startListening: startContinuousListening,
     stopListening: stopContinuousListening,
     isListening: csrIsListening,
-    currentInterimTranscript: csrCurrentInterimTranscript,
     isReady: csrIsReady,
     resetTranscript: csrResetTranscript,
   } = useContinuousSpeechRecognition(
@@ -121,9 +120,8 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
       }
     }, [startVoiceLoop, stopVoiceLoop]),
     useCallback((interimTranscript) => {
-      if (isVoiceLoopActiveRef.current) {
-        setCurrentInterimTranscript(interimTranscript);
-      }
+      // Always show the user what is being transcribed for better feedback.
+      setCurrentInterimText(interimTranscript);
     }, []),
     useCallback((error) => {
       console.error("Continuous recognition error in VoiceLoop:", error);
@@ -169,7 +167,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
 
   const resetAllFlags = useCallback(() => {
     setIsRecordingUser(false);
-    setCurrentInterimTranscript('');
+    setCurrentInterimText('');
     csrResetTranscript();
   }, [csrResetTranscript]);
 
@@ -236,7 +234,7 @@ export function useVoiceLoop(supabase: SupabaseClient, session: Session | null):
     isSpeakingAI,
     isThinkingAI,
     isLoadingHistory,
-    currentInterimText: isVoiceLoopActive ? currentInterimText : csrCurrentInterimTranscript,
+    currentInterimText,
     aiResponseText,
     isRecognitionReady: csrIsReady,
     processUserInput,
