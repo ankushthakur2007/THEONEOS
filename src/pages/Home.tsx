@@ -170,7 +170,7 @@ const Home: React.FC = () => {
 
   const mainContent = (
     <div className="flex flex-col h-full">
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col overflow-hidden">
         {messages.length === 0 && !isThinking ? (
           <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
             <h1 className="text-5xl font-bold mb-4 text-primary">
