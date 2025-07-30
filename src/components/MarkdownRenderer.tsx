@@ -9,18 +9,16 @@ interface MarkdownRendererProps {
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
-  const codeTheme = vscDarkPlus;
-
   return (
     <div className="prose dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-blockquote:not-italic">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, className, children, ...props }) {
+          code({ node, inline, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
-            return match ? (
+            return !inline && match ? (
               <SyntaxHighlighter
-                style={codeTheme as any}
+                style={vscDarkPlus as any}
                 language={match[1]}
                 PreTag="div"
                 {...props}
