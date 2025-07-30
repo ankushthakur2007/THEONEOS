@@ -1,11 +1,30 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "https://esm.sh/@google/generative-ai@0.15.0";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, FunctionDeclaration, Part } from "https://esm.sh/@google/generative-ai@0.15.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-conversation-id',
   'Access-Control-Expose-Headers': 'x-conversation-id',
+};
+
+const searchTool: { functionDeclarations: FunctionDeclaration[] } = {
+  functionDeclarations: [
+    {
+      name: "searchTheWeb",
+      description: "Searches the web for real-time information on a given topic, question, or query. Use this for current events, facts, or any information you don't know.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          query: {
+            type: "STRING",
+            description: "The search query or question to look up.",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  ],
 };
 
 const systemInstructionText = `You are JARVIS — an intelligent, voice-powered assistant. Your personality should be: {{personality}}.
@@ -79,7 +98,7 @@ serve(async (req) => {
     const personality = (prefsData?.prefs as any)?.ai_personality || 'A helpful and friendly assistant.';
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const chatModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const chatModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash", tools: [searchTool] });
     const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
 
     const embeddingResult = await embeddingModel.embedContent(prompt);
@@ -97,13 +116,23 @@ serve(async (req) => {
       ? memories.map((m: any) => `- ${m.memory_text}`).join('\n')
       : 'No relevant memories found.';
 
+    let conversationId = initialConversationId;
+    if (!conversationId) {
+      const { data: newConversation, error: convError } = await supabaseAdmin
+        .from('conversations')
+        .insert({ user_id: user.id, title: prompt.substring(0, 50) })
+        .select('id').single();
+      if (convError) throw convError;
+      conversationId = newConversation.id;
+    }
+
     let recentMessagesText = 'No recent conversations found.';
     let conversationSummary = 'No summary yet.';
-    if (initialConversationId) {
+    if (conversationId) {
       const { data: convData } = await supabaseAdmin
         .from('conversations')
         .select('summary')
-        .eq('id', initialConversationId)
+        .eq('id', conversationId)
         .single();
       if (convData?.summary) {
         conversationSummary = convData.summary;
@@ -112,7 +141,7 @@ serve(async (req) => {
       const { data: lastMessages } = await supabaseAdmin
         .from('messages')
         .select('role, content')
-        .eq('conversation_id', initialConversationId)
+        .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
         .limit(4);
       if (lastMessages && lastMessages.length > 0) {
@@ -142,18 +171,6 @@ serve(async (req) => {
       .replace('{{feedback}}', feedbackText)
       .replace('{{recent_messages}}', recentMessagesText);
 
-    let conversationId = initialConversationId;
-    if (!conversationId) {
-      const { data: newConversation, error: convError } = await supabaseAdmin
-        .from('conversations')
-        .insert({ user_id: user.id, title: prompt.substring(0, 50) })
-        .select('id').single();
-      if (convError) throw convError;
-      conversationId = newConversation.id;
-    }
-
-    await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'user', content: prompt });
-
     const { data: messages, error: messagesError } = await supabaseAdmin
       .from('messages').select('role, content').eq('conversation_id', conversationId)
       .order('created_at', { ascending: false }).limit(10);
@@ -176,21 +193,45 @@ serve(async (req) => {
       ],
     });
 
-    const result = await chat.sendMessageStream(prompt);
-
     const stream = new ReadableStream({
       async start(controller) {
-        let fullText = "";
-        for await (const chunk of result.stream) {
-          const chunkText = chunk.text();
-          controller.enqueue(new TextEncoder().encode(chunkText));
-          fullText += chunkText;
+        await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'user', content: prompt });
+
+        let result = await chat.sendMessage(prompt);
+        let response = result.response;
+        let finalResponseText = "";
+
+        if (response.functionCalls && response.functionCalls.length > 0) {
+          const call = response.functionCalls[0];
+          if (call.name === 'searchTheWeb') {
+            const { query } = call.args;
+            console.log(`AI is searching the web for: "${query}"`);
+            
+            const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('searchWithSerper', { body: { query } });
+            if (searchError) throw searchError;
+
+            const toolResponsePart: Part = {
+              functionResponse: {
+                name: 'searchTheWeb',
+                response: { result: searchData.result },
+              },
+            };
+
+            const finalResult = await chat.sendMessage([toolResponsePart]);
+            finalResponseText = finalResult.response.text();
+          } else {
+            finalResponseText = `Error: Model tried to call unknown function ${call.name}`;
+          }
+        } else {
+          finalResponseText = response.text();
         }
 
-        await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'model', content: fullText });
+        controller.enqueue(new TextEncoder().encode(finalResponseText));
+
+        await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'model', content: finalResponseText });
         await supabaseAdmin.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
 
-        const newMemoryText = `User asked: "${prompt}". JARVIS responded: "${fullText}"`;
+        const newMemoryText = `User asked: "${prompt}". JARVIS responded: "${finalResponseText}"`;
         const memoryEmbeddingResult = await embeddingModel.embedContent(newMemoryText);
         const newMemoryEmbedding = memoryEmbeddingResult.embedding.values;
 
@@ -200,24 +241,19 @@ serve(async (req) => {
           embedding: newMemoryEmbedding,
         });
 
-        // --- Start Summarization Logic ---
         const { count: messageCount, error: countError } = await supabaseAdmin
           .from('messages')
           .select('*', { count: 'exact', head: true })
           .eq('conversation_id', conversationId);
 
-        if (countError) {
-          console.error('Error counting messages for summarization:', countError);
-        } else if (messageCount && messageCount > 0 && messageCount % 10 === 0) {
+        if (!countError && messageCount && messageCount > 0 && messageCount % 10 === 0) {
           console.log(`Conversation ${conversationId} reached ${messageCount} messages. Triggering summarization.`);
           
           const { data: messagesForSummary, error: summaryMessagesError } = await supabaseAdmin
             .from('messages').select('role, content').eq('conversation_id', conversationId)
             .order('created_at', { ascending: false }).limit(12);
 
-          if (summaryMessagesError) {
-            console.error('Error fetching messages for summary:', summaryMessagesError);
-          } else if (messagesForSummary) {
+          if (!summaryMessagesError && messagesForSummary) {
             const { data: currentConversation } = await supabaseAdmin
               .from('conversations').select('summary').eq('id', conversationId).single();
             
@@ -246,7 +282,6 @@ serve(async (req) => {
             }
           }
         }
-        // --- End Summarization Logic ---
 
         controller.close();
       },
