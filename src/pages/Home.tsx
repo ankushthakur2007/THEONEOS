@@ -10,7 +10,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { LogOut, Mic, Send, User, Settings as SettingsIcon, PanelLeftClose, PanelLeftOpen, Trash2 } from 'lucide-react';
+import { LogOut, Mic, Send, User, Settings as SettingsIcon, PanelLeftClose, PanelLeftOpen, Trash2, Edit2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -42,6 +42,9 @@ const Home: React.FC = () => {
   const [refreshSidebarKey, setRefreshSidebarKey] = useState(0);
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
+  const [conversationTitle, setConversationTitle] = useState('New Chat');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [originalTitle, setOriginalTitle] = useState('');
 
   const { processUserInput, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(
     supabase,
@@ -49,7 +52,7 @@ const Home: React.FC = () => {
     selectedConversationId,
     (id) => {
       setSelectedConversationId(id);
-      setRefreshSidebarKey(prev => prev + 1); // Refresh sidebar when new chat is created
+      setRefreshSidebarKey(prev => prev + 1);
     }
   );
 
@@ -67,12 +70,75 @@ const Home: React.FC = () => {
     },
   });
 
+  useEffect(() => {
+    const fetchConversationTitle = async () => {
+      if (!selectedConversationId || !session?.user) {
+        setConversationTitle('New Chat');
+        setIsEditingTitle(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('title')
+        .eq('id', selectedConversationId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching conversation title:', error);
+        toast.error('Could not load conversation title.');
+        setConversationTitle('Untitled Chat');
+      } else if (data) {
+        const title = data.title || 'Untitled Chat';
+        setConversationTitle(title);
+        setOriginalTitle(title);
+      }
+    };
+
+    fetchConversationTitle();
+  }, [selectedConversationId, session, supabase, refreshSidebarKey]);
+
+  const handleTitleSave = async () => {
+    if (!selectedConversationId) return;
+
+    const newTitle = conversationTitle.trim();
+    if (!newTitle) {
+      toast.error("Title cannot be empty.");
+      setConversationTitle(originalTitle);
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setIsEditingTitle(false);
+
+    if (newTitle === originalTitle) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from('conversations')
+      .update({ title: newTitle })
+      .eq('id', selectedConversationId);
+
+    if (error) {
+      toast.error(`Failed to rename chat: ${error.message}`);
+      setConversationTitle(originalTitle);
+    } else {
+      toast.success('Chat renamed successfully.');
+      setOriginalTitle(newTitle);
+      setRefreshSidebarKey(prev => prev + 1);
+    }
+  };
+
+  const handleTitleEditClick = () => {
+    setOriginalTitle(conversationTitle);
+    setIsEditingTitle(true);
+  };
+
   const handleTextSubmit = async (values: ChatFormValues) => {
-    // Stop listening if the user submits text while the mic is on
     if (isListening) {
       stopListening();
     }
-    // Process the text if there is any
     if (values.message.trim()) {
       await processUserInput(values.message.trim());
       form.reset({ message: '' });
@@ -82,13 +148,11 @@ const Home: React.FC = () => {
   const handleMicClick = () => {
     if (isListening) {
       stopListening();
-      // After stopping, if there's a transcript, submit it.
       const currentTranscript = form.getValues('message');
       if (currentTranscript.trim()) {
         handleTextSubmit({ message: currentTranscript });
       }
     } else {
-      // Before starting, clear any previous text.
       form.reset({ message: '' });
       startListening();
     }
@@ -229,7 +293,7 @@ const Home: React.FC = () => {
   return (
     <div className="flex flex-col h-dvh bg-background text-foreground animate-fade-in">
       <header className="p-4 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {isMobile ? (
             <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
               <SheetTrigger asChild>
@@ -246,7 +310,36 @@ const Home: React.FC = () => {
               {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
             </Button>
           )}
-          <h1 className="text-xl font-bold">THEONEOS</h1>
+          
+          {isEditingTitle ? (
+            <Input
+              value={conversationTitle}
+              onChange={(e) => setConversationTitle(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleTitleSave();
+                }
+                if (e.key === 'Escape') {
+                  setIsEditingTitle(false);
+                  setConversationTitle(originalTitle);
+                }
+              }}
+              className="h-9 text-xl font-bold"
+              autoFocus
+            />
+          ) : (
+            <h1 className="text-xl font-bold truncate" title={conversationTitle}>
+              {conversationTitle}
+            </h1>
+          )}
+
+          {selectedConversationId && !isEditingTitle && (
+            <Button variant="ghost" size="icon" onClick={handleTitleEditClick} className="shrink-0">
+              <Edit2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {selectedConversationId && (
