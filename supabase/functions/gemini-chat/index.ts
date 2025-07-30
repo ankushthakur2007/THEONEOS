@@ -204,12 +204,22 @@ serve(async (req) => {
             
             if (call.name === 'searchTheWeb') {
               const { query } = call.args;
+              console.log(`Invoking 'searchWithSerper' function with query: "${query}"`);
+              
               const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('searchWithSerper', { body: { query } });
-              if (searchError) throw searchError;
+              
+              if (searchError) {
+                  console.error("Error invoking 'searchWithSerper':", JSON.stringify(searchError, null, 2));
+                  throw searchError;
+              }
+          
+              console.log("'searchWithSerper' response data:", JSON.stringify(searchData, null, 2));
 
               const toolResponsePart: Part = {
                 functionResponse: { name: 'searchTheWeb', response: { result: searchData.result } },
               };
+
+              console.log("Sending tool response back to Gemini:", JSON.stringify(toolResponsePart, null, 2));
 
               const finalResultStream = await chat.sendMessageStream([toolResponsePart]);
               for await (const chunk of finalResultStream.stream) {

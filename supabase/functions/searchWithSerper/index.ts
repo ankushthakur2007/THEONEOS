@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log("--- [searchWithSerper START] ---");
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
