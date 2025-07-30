@@ -223,7 +223,7 @@ const Home: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground animate-fade-in">
+    <div className="flex flex-col h-dvh bg-background text-foreground animate-fade-in">
       <header className="p-4 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b">
         <div className="flex items-center gap-2">
           {isMobile ? (
