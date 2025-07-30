@@ -3,9 +3,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { cn } from '@/lib/utils';
 
 interface MarkdownRendererProps {
   content: string;
+  invertInDarkMode?: boolean;
 }
 
 // Define a specific type for the props our custom code component will receive.
@@ -17,9 +19,12 @@ interface CodeProps {
   children?: ReactNode;
 }
 
-export const MarkdownRenderer: FC<MarkdownRendererProps> = ({ content }) => {
+export const MarkdownRenderer: FC<MarkdownRendererProps> = ({ content, invertInDarkMode = true }) => {
   return (
-    <div className="prose dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-blockquote:not-italic">
+    <div className={cn(
+      "prose max-w-none prose-p:my-2 prose-headings:my-3 prose-blockquote:not-italic",
+      invertInDarkMode && "dark:prose-invert"
+    )}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

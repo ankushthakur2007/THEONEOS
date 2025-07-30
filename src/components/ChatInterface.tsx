@@ -62,7 +62,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     : 'bg-muted'
                 )}
               >
-                <MarkdownRenderer content={msg.parts[0].text || '...'} />
+                <MarkdownRenderer
+                  content={msg.parts[0].text || '...'}
+                  invertInDarkMode={msg.role !== 'user'}
+                />
                 {msg.role === 'model' && msg.parts[0].text && (
                   <div className="flex items-center gap-1 mt-2 text-muted-foreground">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(msg.parts[0].text)}>
