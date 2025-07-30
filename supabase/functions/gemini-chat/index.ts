@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.15.0";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "https://esm.sh/@google/generative-ai@0.15.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +14,11 @@ You must always:
 - Determine if you can confidently answer yourself
 - If not, use a tool
 
+---
+🧠 Relevant Memories:
+Based on the user's query, here are some relevant past interactions or facts you should consider. If none are provided, you have no relevant memories.
+---
+{{memories}}
 ---
 
 🛠️ You have access to one tool:
@@ -84,9 +89,7 @@ serve(async (req) => {
     const { prompt, conversationId: initialConversationId } = await req.json();
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 
-    if (!geminiApiKey) {
-      throw new Error('Gemini API key not set.');
-    }
+    if (!geminiApiKey) throw new Error('Gemini API key not set.');
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -95,36 +98,46 @@ serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization')!;
     const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (!user) {
-      throw new Error('User not authenticated.');
-    }
+    if (!user) throw new Error('User not authenticated.');
 
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const chatModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+
+    // --- RECALL ---
+    const embeddingResult = await embeddingModel.embedContent(prompt);
+    const queryEmbedding = embeddingResult.embedding.values;
+
+    const { data: memories, error: memoriesError } = await supabaseAdmin.rpc('match_memories', {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.75,
+      match_count: 5,
+      requesting_user_id: user.id,
+    });
+    if (memoriesError) throw memoriesError;
+
+    const memoryText = memories.length > 0
+      ? memories.map((m: any) => `- ${m.memory_text}`).join('\n')
+      : 'No relevant memories found.';
+
+    const finalSystemInstruction = systemInstructionText.replace('{{memories}}', memoryText);
+
+    // --- REASON ---
     let conversationId = initialConversationId;
-
     if (!conversationId) {
       const { data: newConversation, error: convError } = await supabaseAdmin
         .from('conversations')
         .insert({ user_id: user.id, title: prompt.substring(0, 50) })
-        .select('id')
-        .single();
-      
+        .select('id').single();
       if (convError) throw convError;
       conversationId = newConversation.id;
     }
 
-    await supabaseAdmin.from('messages').insert({
-      conversation_id: conversationId,
-      role: 'user',
-      content: prompt,
-    });
+    await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'user', content: prompt });
 
     const { data: messages, error: messagesError } = await supabaseAdmin
-      .from('messages')
-      .select('role, content')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: false })
-      .limit(10);
-
+      .from('messages').select('role, content').eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false }).limit(10);
     if (messagesError) throw messagesError;
 
     const history = messages.reverse().map(msg => ({
@@ -132,12 +145,15 @@ serve(async (req) => {
       parts: [{ text: msg.content }],
     }));
 
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-    const chat = model.startChat({
+    const chat = chatModel.startChat({
       history: history.slice(0, -1),
-      systemInstruction: { role: 'system', parts: [{ text: systemInstructionText }] },
+      systemInstruction: { role: 'system', parts: [{ text: finalSystemInstruction }] },
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      ],
     });
 
     const result = await chat.sendMessage(prompt);
@@ -158,13 +174,19 @@ serve(async (req) => {
       } catch (e) { /* Not a valid JSON, treat as regular text */ }
     }
 
-    await supabaseAdmin.from('messages').insert({
-      conversation_id: conversationId,
-      role: 'model',
-      content: aiText,
-    });
-    
+    // --- LEARN ---
+    await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'model', content: aiText });
     await supabaseAdmin.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
+
+    const newMemoryText = `User asked: "${prompt}". JARVIS responded: "${aiText}"`;
+    const memoryEmbeddingResult = await embeddingModel.embedContent(newMemoryText);
+    const newMemoryEmbedding = memoryEmbeddingResult.embedding.values;
+
+    await supabaseAdmin.from('user_memories').insert({
+      user_id: user.id,
+      memory_text: newMemoryText,
+      embedding: newMemoryEmbedding,
+    });
 
     return new Response(JSON.stringify({ text: aiText, conversationId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
