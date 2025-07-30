@@ -24,7 +24,7 @@ export const JarvisSphere: React.FC<JarvisSphereProps> = ({
   isThinking,
   isSpeaking,
 }) => {
-  const size = 'w-48 h-48 md:w-64 md:h-64';
+  const size = 'w-40 h-40 md:w-48 md:h-48';
   const isIdle = !isRecordingUser && !isThinking && !isSpeaking;
 
   const getState = () => {
@@ -57,10 +57,10 @@ export const JarvisSphere: React.FC<JarvisSphereProps> = ({
         )}
 
         {/* State Icons */}
-        <SphereState icon={<Bot size={64} className="text-primary-foreground" />} label="Idle" className={cn(currentState === 'idle' ? 'opacity-100' : 'opacity-0')} />
-        <SphereState icon={<Mic size={64} className="text-primary-foreground" />} label="Listening..." className={cn(currentState === 'listening' ? 'opacity-100' : 'opacity-0')} />
-        <SphereState icon={<BrainCircuit size={64} className="text-primary-foreground" />} label="Thinking..." className={cn(currentState === 'thinking' ? 'opacity-100' : 'opacity-0')} />
-        <SphereState icon={<Waves size={64} className="text-primary-foreground" />} label="Speaking..." className={cn(currentState === 'speaking' ? 'opacity-100' : 'opacity-0')} />
+        <SphereState icon={<Bot size={48} className="text-primary-foreground" />} label="Idle" className={cn(currentState === 'idle' ? 'opacity-100' : 'opacity-0')} />
+        <SphereState icon={<Mic size={48} className="text-primary-foreground" />} label="Listening..." className={cn(currentState === 'listening' ? 'opacity-100' : 'opacity-0')} />
+        <SphereState icon={<BrainCircuit size={48} className="text-primary-foreground" />} label="Thinking..." className={cn(currentState === 'thinking' ? 'opacity-100' : 'opacity-0')} />
+        <SphereState icon={<Waves size={48} className="text-primary-foreground" />} label="Speaking..." className={cn(currentState === 'speaking' ? 'opacity-100' : 'opacity-0')} />
       </div>
     </div>
   );

@@ -55,14 +55,14 @@ const Home: React.FC = () => {
         </DropdownMenu>
       </header>
 
-      <main className="flex-grow flex flex-col items-center justify-center text-center p-4 space-y-8">
+      <main className="flex-grow flex flex-col items-center justify-center text-center p-4 sm:p-6 space-y-6">
         <JarvisSphere
           isRecordingUser={isRecordingUser}
           isThinking={isThinking}
           isSpeaking={isSpeakingAI}
         />
 
-        <div className="h-24 w-full max-w-3xl flex items-center justify-center">
+        <div className="min-h-[6rem] w-full max-w-3xl flex items-center justify-center">
           <p className={cn(
             "text-2xl md:text-3xl font-medium transition-opacity duration-300",
             displayText ? "opacity-100" : "opacity-0"
