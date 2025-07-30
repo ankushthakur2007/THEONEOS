@@ -28,6 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 const chatSchema = z.object({
   message: z.string(),
@@ -158,13 +159,87 @@ const Home: React.FC = () => {
 
   const isThinking = isThinkingAI || isLoadingHistory;
 
+  const sidebarContent = (
+    <ConversationSidebar
+      selectedConversationId={selectedConversationId}
+      onSelectConversation={handleSelectConversation}
+      onNewChat={handleNewChat}
+      refreshKey={refreshSidebarKey}
+    />
+  );
+
+  const mainContent = (
+    <div className="flex flex-col h-full">
+      <main className="flex-1 flex flex-col overflow-y-auto">
+        {messages.length === 0 && !isThinking ? (
+          <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
+              Hi {profile?.first_name || 'there'}, what should we dive into today?
+            </h2>
+          </div>
+        ) : (
+          <ChatInterface
+            messages={messages}
+            isThinking={isThinkingAI}
+            isLoadingHistory={isLoadingHistory}
+          />
+        )}
+      </main>
+
+      <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 bg-background">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
+            <FormField
+              control={form.control}
+              name="message"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input
+                      placeholder="Message JARVIS..."
+                      className="pr-20"
+                      {...field}
+                      disabled={isThinking || isListening}
+                      autoComplete="off"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
+                <Mic className={isListening ? "text-red-500" : ""} />
+              </Button>
+              <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening}>
+                <Send />
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </footer>
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground animate-fade-in">
       <header className="p-4 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-            {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-          </Button>
+          {isMobile ? (
+            <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <PanelLeftOpen />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-80">
+                {sidebarContent}
+              </SheetContent>
+            </Sheet>
+          ) : (
+            <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+              {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+            </Button>
+          )}
           <h1 className="text-xl font-bold">THEONEOS</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -214,72 +289,23 @@ const Home: React.FC = () => {
         </div>
       </header>
 
-      <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-        {isSidebarOpen && (
-          <>
-            <ResizablePanel defaultSize={20} minSize={15} maxSize={30} className="hidden md:block">
-              <ConversationSidebar
-                selectedConversationId={selectedConversationId}
-                onSelectConversation={handleSelectConversation}
-                onNewChat={handleNewChat}
-                refreshKey={refreshSidebarKey}
-              />
-            </ResizablePanel>
-            <ResizableHandle withHandle className="hidden md:flex" />
-          </>
-        )}
-        <ResizablePanel defaultSize={80}>
-          <div className="flex flex-col h-full">
-            <main className="flex-1 flex flex-col overflow-y-auto">
-              {messages.length === 0 && !isThinking ? (
-                <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
-                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold">
-                    Hi {profile?.first_name || 'there'}, what should we dive into today?
-                  </h2>
-                </div>
-              ) : (
-                <ChatInterface
-                  messages={messages}
-                  isThinking={isThinkingAI}
-                  isLoadingHistory={isLoadingHistory}
-                />
-              )}
-            </main>
-
-            <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 bg-background">
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
-                  <FormField
-                    control={form.control}
-                    name="message"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input
-                            placeholder="Message JARVIS..."
-                            className="pr-20"
-                            {...field}
-                            disabled={isThinking || isListening}
-                            autoComplete="off"
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
-                      <Mic className={isListening ? "text-red-500" : ""} />
-                    </Button>
-                    <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening}>
-                      <Send />
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </footer>
-          </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+      {isMobile ? (
+        <div className="flex-1 overflow-hidden">{mainContent}</div>
+      ) : (
+        <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+          {isSidebarOpen && (
+            <>
+              <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+                {sidebarContent}
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+            </>
+          )}
+          <ResizablePanel>
+            {mainContent}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
     </div>
   );
 };
