@@ -11,14 +11,14 @@ const corsHeaders = {
 const searchTool: { functionDeclarations: FunctionDeclaration[] } = {
   functionDeclarations: [
     {
-      name: "searchTheWeb",
-      description: "Searches the web for real-time information on a given topic, question, or query. Use this for current events, facts, or any information you don't know.",
+      name: "search",
+      description: "Searches the web for real-time, up-to-date information on any topic, including news, weather, and recent events. Use this for any query that requires current knowledge.",
       parameters: {
         type: "OBJECT",
         properties: {
           query: {
             type: "STRING",
-            description: "The search query or question to look up.",
+            description: "The precise search query to look up on the internet.",
           },
         },
         required: ["query"],
@@ -27,25 +27,30 @@ const searchTool: { functionDeclarations: FunctionDeclaration[] } = {
   ],
 };
 
-const systemInstructionText = `You are JARVIS, an intelligent assistant. Your personality is: {{personality}}.
-Your goal is to be conversational, relatable, and human. Write concisely and vary your response structure.
-When you are unsure about something, state it clearly.
-To answer questions requiring real-time information (like current events or facts), you MUST use the 'searchTheWeb' tool. Do not answer from memory.
-You must always respond using Markdown format.
+const systemInstructionText = `You are JARVIS, a helpful AI assistant. Your primary function is to provide accurate and up-to-date information.
+
+When the user asks a question, first determine if you can answer it from your internal knowledge. If the question involves any of the following, you MUST use the 'search' tool:
+- Recent events (anything in the last year)
+- News, stock prices, weather, or sports scores
+- Information about specific people, companies, or products that might have changed recently
+- Any topic where being up-to-date is critical
+
+Do not apologize for not knowing something; use the search tool instead.
 ---
-📜 Conversation Summary:
-{{summary}}
+Your personality is: {{personality}}.
 ---
 🧠 Relevant Memories:
 {{memories}}
 ---
-👍 User Feedback:
-{{feedback}}
----
 📜 Recent Conversation History:
 {{recent_messages}}
 ---
-`;
+👍 User Feedback:
+{{feedback}}
+---
+🛠️ You have access to one tool:
+- 'search': Use this tool to get real-time information from the web to answer the user's question accurately.
+  - 'query': A concise and effective search query (e.g., "weather in London", "latest Apple stock price").`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -202,7 +207,7 @@ serve(async (req) => {
             const call = response.functionCalls[0];
             console.log(`Attempting to call tool: ${call.name} with args: ${JSON.stringify(call.args)}`);
             
-            if (call.name === 'searchTheWeb') {
+            if (call.name === 'search') {
               const { query } = call.args;
               console.log(`Invoking 'searchWithSerper' function with query: "${query}"`);
               
@@ -218,7 +223,7 @@ serve(async (req) => {
               console.log("'searchWithSerper' response data:", JSON.stringify(searchData, null, 2));
 
               const toolResponsePart: Part = {
-                functionResponse: { name: 'searchTheWeb', response: { result: searchData.result } },
+                functionResponse: { name: 'search', response: { result: searchData.result } },
               };
 
               console.log("Sending tool response back to Gemini:", JSON.stringify(toolResponsePart, null, 2));
