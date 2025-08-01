@@ -28,6 +28,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import TextareaAutosize from 'react-textarea-autosize';
 
 const chatSchema = z.object({
   message: z.string(),
@@ -265,18 +266,25 @@ const Home: React.FC = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <Input
+                    <TextareaAutosize
                       placeholder="Message JARVIS..."
-                      className="w-full rounded-full py-6 pl-6 pr-24 bg-muted border-muted-foreground/20 focus-visible:ring-primary"
+                      className="w-full rounded-2xl p-4 pr-24 resize-none bg-muted border-muted-foreground/20 focus-visible:ring-primary"
                       {...field}
                       disabled={isThinking || isListening}
                       autoComplete="off"
+                      maxRows={6}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          form.handleSubmit(handleTextSubmit)();
+                        }
+                      }}
                     />
                   </FormControl>
                 </FormItem>
               )}
             />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <div className="absolute right-3 bottom-3 flex items-center gap-1">
               <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
                 <Mic className={isListening ? "text-red-500" : ""} />
               </Button>
