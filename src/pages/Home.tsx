@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 const chatSchema = z.object({
   message: z.string(),
@@ -302,6 +302,9 @@ const Home: React.FC = () => {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0 w-80">
+                <SheetHeader>
+                  <SheetTitle className="p-4 text-left text-lg font-semibold tracking-tight">Conversations</SheetTitle>
+                </SheetHeader>
                 {sidebarContent}
               </SheetContent>
             </Sheet>
