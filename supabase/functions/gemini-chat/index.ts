@@ -197,10 +197,13 @@ serve(async (req) => {
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content }],
     }));
-    console.log("--- CHAT HISTORY FOR API ---\n" + JSON.stringify(history, null, 2));
+
+    const firstUserMessageIndex = history.findIndex(msg => msg.role === 'user');
+    const cleanedHistory = firstUserMessageIndex > -1 ? history.slice(firstUserMessageIndex) : [];
+    console.log("--- CHAT HISTORY FOR API ---\n" + JSON.stringify(cleanedHistory, null, 2));
 
     const chat = chatModel.startChat({
-      history: history,
+      history: cleanedHistory,
       systemInstruction: { role: 'system', parts: [{ text: finalSystemInstruction }] },
       safetySettings: [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
