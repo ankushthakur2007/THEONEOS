@@ -10,7 +10,8 @@ export interface ChatMessage {
 }
 
 interface UseAIInteractionReturn {
-  processUserInput: (text: string, file?: File | null) => Promise<{ text: string }>;
+  processUserInput: (text: string, file: File | null, fileUrl: string | null) => Promise<{ text: string }>;
+  uploadFile: (file: File) => Promise<string>;
   isThinkingAI: boolean;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -67,32 +68,35 @@ export function useAIInteraction(
     fetchMessages(conversationId);
   }, [session?.user?.id, conversationId, fetchMessages]);
 
-  const processUserInput = useCallback(async (text: string, file: File | null = null): Promise<{ text: string }> => {
+  const uploadFile = useCallback(async (file: File): Promise<string> => {
+    if (!session) {
+      throw new Error("You must be logged in to upload files.");
+    }
+    const filePath = `${session.user.id}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from('fileuploads').upload(filePath, file);
+    if (uploadError) {
+      throw new Error(`Storage error: ${uploadError.message}`);
+    }
+    const { data: urlData } = supabase.storage.from('fileuploads').getPublicUrl(filePath);
+    return urlData.publicUrl;
+  }, [supabase, session]);
+
+  const processUserInput = useCallback(async (text: string, file: File | null, fileUrl: string | null): Promise<{ text: string }> => {
     if (!session) {
         toast.error("You must be logged in to chat.");
         throw new Error("User not authenticated");
     }
     setIsThinkingAI(true);
 
-    let fileUrl: string | null = null;
     let fileData: string | null = null;
     let fileMimeType: string | null = null;
 
     if (file) {
-      const uploadToast = toast.loading("Uploading file...");
       try {
-        const filePath = `${session.user.id}/${Date.now()}-${file.name}`;
-        const { error: uploadError } = await supabase.storage.from('fileuploads').upload(filePath, file);
-        if (uploadError) throw new Error(`Storage error: ${uploadError.message}`);
-        
-        const { data: urlData } = supabase.storage.from('fileuploads').getPublicUrl(filePath);
-        fileUrl = urlData.publicUrl;
-
         fileData = await toBase64(file);
         fileMimeType = file.type;
-        toast.success("File uploaded successfully!", { id: uploadToast });
       } catch (error: any) {
-        toast.error(`File upload failed: ${error.message}`, { id: uploadToast });
+        toast.error(`Failed to process file: ${error.message}`);
         setIsThinkingAI(false);
         throw error;
       }
@@ -166,6 +170,7 @@ export function useAIInteraction(
   }, [supabase, session, conversationId, setConversationId, fetchMessages]);
 
   return {
+    uploadFile,
     processUserInput,
     isThinkingAI,
     messages,

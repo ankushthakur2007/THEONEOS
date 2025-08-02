@@ -10,7 +10,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { LogOut, Mic, Send, User, Settings as SettingsIcon, PanelLeftClose, PanelLeftOpen, Trash2, Edit2, Paperclip, X } from 'lucide-react';
+import { LogOut, Mic, Send, User, Settings as SettingsIcon, PanelLeftClose, PanelLeftOpen, Trash2, Edit2, Paperclip } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -19,6 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import TextareaAutosize from 'react-textarea-autosize';
+import { FilePreview, UploadStatus } from '@/components/FilePreview';
 
 const chatSchema = z.object({ message: z.string() });
 type ChatFormValues = z.infer<typeof chatSchema>;
@@ -36,9 +37,10 @@ const Home: React.FC = () => {
   const [originalTitle, setOriginalTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [uploadState, setUploadState] = useState<{ status: UploadStatus; url: string | null }>({ status: 'idle', url: null });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { processUserInput, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(
+  const { processUserInput, uploadFile, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(
     supabase, session, selectedConversationId,
     (id) => {
       setSelectedConversationId(id);
@@ -56,7 +58,7 @@ const Home: React.FC = () => {
     onError: (error) => toast.error(`Voice input error: ${error}`),
   });
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
       if (selectedFile.size > 5 * 1024 * 1024) { // 5MB limit
@@ -64,6 +66,8 @@ const Home: React.FC = () => {
         return;
       }
       setFile(selectedFile);
+      setUploadState({ status: 'uploading', url: null });
+
       if (selectedFile.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => setFilePreview(reader.result as string);
@@ -71,12 +75,22 @@ const Home: React.FC = () => {
       } else {
         setFilePreview(null);
       }
+
+      try {
+        const url = await uploadFile(selectedFile);
+        setUploadState({ status: 'success', url });
+        toast.success("File ready to be sent.");
+      } catch (error) {
+        setUploadState({ status: 'error', url: null });
+        toast.error("File upload failed. Please try again.");
+      }
     }
   };
 
   const handleRemoveFile = () => {
     setFile(null);
     setFilePreview(null);
+    setUploadState({ status: 'idle', url: null });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -127,7 +141,15 @@ const Home: React.FC = () => {
   const handleTextSubmit = async (values: ChatFormValues) => {
     if (isListening) stopListening();
     if (values.message.trim() || file) {
-      await processUserInput(values.message.trim(), file);
+      if (file && uploadState.status === 'uploading') {
+        toast.info("Please wait for the file to finish uploading.");
+        return;
+      }
+      if (file && uploadState.status === 'error') {
+        toast.error("Cannot send message, file upload failed.");
+        return;
+      }
+      await processUserInput(values.message.trim(), file, uploadState.url);
       form.reset({ message: '' });
       handleRemoveFile();
     }
@@ -191,22 +213,12 @@ const Home: React.FC = () => {
       </main>
       <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 bg-transparent">
         {file && (
-          <div className="relative mb-2 p-2 border rounded-lg bg-muted/50 flex items-center gap-3 animate-slide-up-fade">
-            {filePreview ? (
-              <img src={filePreview} alt="File preview" className="h-12 w-12 rounded object-cover" />
-            ) : (
-              <div className="h-12 w-12 bg-muted rounded flex items-center justify-center">
-                <Paperclip className="h-6 w-6 text-muted-foreground" />
-              </div>
-            )}
-            <div className="text-sm text-muted-foreground truncate flex-1">
-              {file.name}
-              <div className="text-xs">{(file.size / 1024).toFixed(2)} KB</div>
-            </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleRemoveFile}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <FilePreview
+            file={file}
+            previewUrl={filePreview}
+            status={uploadState.status}
+            onRemove={handleRemoveFile}
+          />
         )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
@@ -218,7 +230,7 @@ const Home: React.FC = () => {
                     placeholder="Message JARVIS..."
                     className="w-full rounded-2xl p-4 pr-32 resize-none bg-muted border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-all"
                     {...field}
-                    disabled={isThinkingAI || isLoadingHistory || isListening}
+                    disabled={isThinkingAI || isLoadingHistory || isListening || uploadState.status === 'uploading'}
                     autoComplete="off" maxRows={6}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.handleSubmit(handleTextSubmit)(); } }}
                   />
@@ -226,9 +238,9 @@ const Home: React.FC = () => {
               </FormItem>
             )} />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              <Button type="button" size="icon" variant="ghost" onClick={handleAttachmentClick} disabled={isThinkingAI || isLoadingHistory || isListening}><Paperclip /></Button>
-              <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinkingAI || isLoadingHistory}><Mic className={isListening ? "text-red-500 animate-pulse" : ""} /></Button>
-              <Button type="submit" size="icon" variant="ghost" disabled={isThinkingAI || isLoadingHistory || isListening || (!form.watch('message') && !file)}><Send /></Button>
+              <Button type="button" size="icon" variant="ghost" onClick={handleAttachmentClick} disabled={isThinkingAI || isLoadingHistory || isListening || uploadState.status === 'uploading'}><Paperclip /></Button>
+              <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinkingAI || isLoadingHistory || uploadState.status === 'uploading'}><Mic className={isListening ? "text-red-500 animate-pulse" : ""} /></Button>
+              <Button type="submit" size="icon" variant="ghost" disabled={isThinkingAI || isLoadingHistory || isListening || uploadState.status === 'uploading' || (!form.watch('message') && !file)}><Send /></Button>
             </div>
           </form>
         </Form>
