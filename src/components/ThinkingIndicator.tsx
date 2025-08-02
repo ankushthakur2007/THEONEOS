@@ -1,7 +1,7 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 
-const dotVariants = {
+const dotVariants: Variants = {
   initial: {
     y: "0%",
   },
@@ -10,7 +10,8 @@ const dotVariants = {
   },
 };
 
-const containerVariants = {
+const containerVariants: Variants = {
+  initial: {},
   animate: {
     transition: {
       staggerChildren: 0.15,
