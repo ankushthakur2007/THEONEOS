@@ -16,23 +16,11 @@ import { toast } from 'sonner';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { ConversationSidebar } from '@/components/ConversationSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import TextareaAutosize from 'react-textarea-autosize';
 
-const chatSchema = z.object({
-  message: z.string(),
-});
+const chatSchema = z.object({ message: z.string() });
 type ChatFormValues = z.infer<typeof chatSchema>;
 
 const Home: React.FC = () => {
@@ -48,9 +36,7 @@ const Home: React.FC = () => {
   const [originalTitle, setOriginalTitle] = useState('');
 
   const { processUserInput, isThinkingAI, messages, isLoadingHistory } = useAIInteraction(
-    supabase,
-    session,
-    selectedConversationId,
+    supabase, session, selectedConversationId,
     (id) => {
       setSelectedConversationId(id);
       setRefreshSidebarKey(prev => prev + 1);
@@ -63,12 +49,8 @@ const Home: React.FC = () => {
   });
 
   const { startListening, stopListening, isListening } = useSpeechRecognition({
-    onTranscriptChange: (transcript) => {
-      form.setValue('message', transcript, { shouldValidate: true });
-    },
-    onError: (error) => {
-      toast.error(`Voice input error: ${error}`);
-    },
+    onTranscriptChange: (transcript) => form.setValue('message', transcript, { shouldValidate: true }),
+    onError: (error) => toast.error(`Voice input error: ${error}`),
   });
 
   useEffect(() => {
@@ -78,15 +60,8 @@ const Home: React.FC = () => {
         setIsEditingTitle(false);
         return;
       }
-
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('title')
-        .eq('id', selectedConversationId)
-        .single();
-
+      const { data, error } = await supabase.from('conversations').select('title').eq('id', selectedConversationId).single();
       if (error) {
-        console.error('Error fetching conversation title:', error);
         toast.error('Could not load conversation title.');
         setConversationTitle('Untitled Chat');
       } else if (data) {
@@ -95,13 +70,11 @@ const Home: React.FC = () => {
         setOriginalTitle(title);
       }
     };
-
     fetchConversationTitle();
   }, [selectedConversationId, session, supabase, refreshSidebarKey]);
 
   const handleTitleSave = async () => {
     if (!selectedConversationId) return;
-
     const newTitle = conversationTitle.trim();
     if (!newTitle) {
       toast.error("Title cannot be empty.");
@@ -109,18 +82,9 @@ const Home: React.FC = () => {
       setIsEditingTitle(false);
       return;
     }
-
     setIsEditingTitle(false);
-
-    if (newTitle === originalTitle) {
-      return;
-    }
-
-    const { error } = await supabase
-      .from('conversations')
-      .update({ title: newTitle })
-      .eq('id', selectedConversationId);
-
+    if (newTitle === originalTitle) return;
+    const { error } = await supabase.from('conversations').update({ title: newTitle }).eq('id', selectedConversationId);
     if (error) {
       toast.error(`Failed to rename chat: ${error.message}`);
       setConversationTitle(originalTitle);
@@ -131,15 +95,8 @@ const Home: React.FC = () => {
     }
   };
 
-  const handleTitleEditClick = () => {
-    setOriginalTitle(conversationTitle);
-    setIsEditingTitle(true);
-  };
-
   const handleTextSubmit = async (values: ChatFormValues) => {
-    if (isListening) {
-      stopListening();
-    }
+    if (isListening) stopListening();
     if (values.message.trim()) {
       await processUserInput(values.message.trim());
       form.reset({ message: '' });
@@ -150,9 +107,7 @@ const Home: React.FC = () => {
     if (isListening) {
       stopListening();
       const currentTranscript = form.getValues('message');
-      if (currentTranscript.trim()) {
-        handleTextSubmit({ message: currentTranscript });
-      }
+      if (currentTranscript.trim()) handleTextSubmit({ message: currentTranscript });
     } else {
       form.reset({ message: '' });
       startListening();
@@ -162,135 +117,68 @@ const Home: React.FC = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       if (session?.user) {
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('first_name')
-          .eq('id', session.user.id)
-          .single();
-        if (profileError && profileError.code !== 'PGRST116') {
-          console.error('Error fetching profile:', profileError);
-        } else {
-          setProfile(profileData);
-        }
-
-        const { data: convData, error: convError } = await supabase
-          .from('conversations')
-          .select('id')
-          .eq('user_id', session.user.id)
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (convError && convError.code !== 'PGRST116') {
-          console.error('Error fetching last conversation:', convError);
-        } else if (convData) {
-          setSelectedConversationId(convData.id);
-        }
+        const { data: profileData } = await supabase.from('profiles').select('first_name').eq('id', session.user.id).single();
+        setProfile(profileData);
+        const { data: convData } = await supabase.from('conversations').select('id').eq('user_id', session.user.id).order('updated_at', { ascending: false }).limit(1).single();
+        if (convData) setSelectedConversationId(convData.id);
       }
     };
     fetchInitialData();
   }, [session, supabase]);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const handleNewChat = () => {
-    setSelectedConversationId(null);
-    if (isMobile) setIsSidebarOpen(false);
-  };
-
-  const handleSelectConversation = (id: string) => {
-    setSelectedConversationId(id);
-    if (isMobile) setIsSidebarOpen(false);
-  };
+  const handleSignOut = async () => { await supabase.auth.signOut(); };
+  const handleNewChat = () => { setSelectedConversationId(null); if (isMobile) setIsSidebarOpen(false); };
+  const handleSelectConversation = (id: string) => { setSelectedConversationId(id); if (isMobile) setIsSidebarOpen(false); };
 
   const handleDeleteCurrentConversation = async () => {
     if (!selectedConversationId) return;
-
-    const { error } = await supabase.rpc('delete_user_conversation', {
-      p_conversation_id: selectedConversationId,
-    });
-
-    if (error) {
-      toast.error(`Failed to delete chat: ${error.message}`);
-    } else {
+    const { error } = await supabase.rpc('delete_user_conversation', { p_conversation_id: selectedConversationId });
+    if (error) toast.error(`Failed to delete chat: ${error.message}`);
+    else {
       toast.success('Chat deleted successfully.');
       handleNewChat();
       setRefreshSidebarKey(prev => prev + 1);
     }
   };
 
-  useEffect(() => {
-    setIsSidebarOpen(!isMobile);
-  }, [isMobile]);
+  useEffect(() => { setIsSidebarOpen(!isMobile); }, [isMobile]);
 
-  const isThinking = isThinkingAI || isLoadingHistory;
-
-  const sidebarContent = (
-    <ConversationSidebar
-      selectedConversationId={selectedConversationId}
-      onSelectConversation={handleSelectConversation}
-      onNewChat={handleNewChat}
-      refreshKey={refreshSidebarKey}
-    />
-  );
+  const sidebarContent = <ConversationSidebar selectedConversationId={selectedConversationId} onSelectConversation={handleSelectConversation} onNewChat={handleNewChat} refreshKey={refreshSidebarKey} />;
 
   const mainContent = (
     <div className="flex flex-col h-full bg-background">
       <main className="flex-1 flex flex-col overflow-hidden">
-        {messages.length === 0 && !isThinking ? (
-          <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6 animate-pulse-glow">
-              <h1 className="text-4xl font-bold text-primary">J</h1>
+        {messages.length === 0 && !isLoadingHistory ? (
+          <div className="flex-1 flex flex-col justify-center items-center text-center p-4 animate-slide-up-fade">
+            <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mb-6 animate-pulse-glow">
+              <h1 className="text-5xl font-bold text-primary tracking-tighter">J</h1>
             </div>
-            <p className="text-2xl font-medium text-foreground">
-              How can I help you today, {profile?.first_name || 'there'}?
-            </p>
+            <p className="text-3xl font-medium text-foreground">How can I help you today?</p>
           </div>
         ) : (
-          <ChatInterface
-            messages={messages}
-            isLoadingHistory={isLoadingHistory}
-            conversationId={selectedConversationId}
-          />
+          <ChatInterface messages={messages} isLoadingHistory={isLoadingHistory} conversationId={selectedConversationId} />
         )}
       </main>
-
       <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 bg-transparent">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
-            <FormField
-              control={form.control}
-              name="message"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <TextareaAutosize
-                      placeholder="Message JARVIS..."
-                      className="w-full rounded-2xl p-4 pr-24 resize-none bg-muted border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      {...field}
-                      disabled={isThinking || isListening}
-                      autoComplete="off"
-                      maxRows={6}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          form.handleSubmit(handleTextSubmit)();
-                        }
-                      }}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <FormField control={form.control} name="message" render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <TextareaAutosize
+                    placeholder="Message JARVIS..."
+                    className="w-full rounded-2xl p-4 pr-24 resize-none bg-muted border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-all"
+                    {...field}
+                    disabled={isThinkingAI || isLoadingHistory || isListening}
+                    autoComplete="off" maxRows={6}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.handleSubmit(handleTextSubmit)(); } }}
+                  />
+                </FormControl>
+              </FormItem>
+            )} />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
-                <Mic className={isListening ? "text-red-500 animate-pulse" : ""} />
-              </Button>
-              <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening || !form.watch('message')}>
-                <Send />
-              </Button>
+              <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinkingAI || isLoadingHistory}><Mic className={isListening ? "text-red-500 animate-pulse" : ""} /></Button>
+              <Button type="submit" size="icon" variant="ghost" disabled={isThinkingAI || isLoadingHistory || isListening || !form.watch('message')}><Send /></Button>
             </div>
           </form>
         </Form>
@@ -299,121 +187,43 @@ const Home: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-dvh bg-background text-foreground animate-fade-in">
-      <header className="p-2 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b sticky top-0">
+    <div className="flex flex-col h-dvh bg-background text-foreground">
+      <header className="p-2 flex justify-between items-center z-10 bg-background/70 backdrop-blur-xl shrink-0 border-b sticky top-0">
         <div className="flex items-center gap-2 min-w-0">
           {isMobile ? (
             <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <PanelLeftOpen />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-80 bg-background/95 backdrop-blur-sm">
-                <SheetHeader>
-                  <SheetTitle className="p-4 text-left text-lg font-semibold tracking-tight">Conversations</SheetTitle>
-                </SheetHeader>
-                {sidebarContent}
-              </SheetContent>
+              <SheetTrigger asChild><Button variant="ghost" size="icon"><PanelLeftOpen /></Button></SheetTrigger>
+              <SheetContent side="left" className="p-0 w-80 bg-background/95 backdrop-blur-sm"><SheetHeader><SheetTitle className="p-4 text-left text-lg font-semibold tracking-tight">Conversations</SheetTitle></SheetHeader>{sidebarContent}</SheetContent>
             </Sheet>
           ) : (
-            <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-              {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>{isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>
           )}
-          
           {isEditingTitle ? (
-            <Input
-              value={conversationTitle}
-              onChange={(e) => setConversationTitle(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleTitleSave();
-                }
-                if (e.key === 'Escape') {
-                  setIsEditingTitle(false);
-                  setConversationTitle(originalTitle);
-                }
-              }}
-              className="h-9 text-lg font-semibold bg-transparent"
-              autoFocus
-            />
+            <Input value={conversationTitle} onChange={(e) => setConversationTitle(e.target.value)} onBlur={handleTitleSave} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleTitleSave(); } if (e.key === 'Escape') { setIsEditingTitle(false); setConversationTitle(originalTitle); } }} className="h-9 text-lg font-semibold bg-transparent" autoFocus />
           ) : (
-            <h1 className="text-lg font-semibold truncate" title={conversationTitle}>
-              {conversationTitle}
-            </h1>
+            <h1 className="text-lg font-semibold truncate" title={conversationTitle}>{conversationTitle}</h1>
           )}
-
-          {selectedConversationId && !isEditingTitle && (
-            <Button variant="ghost" size="icon" onClick={handleTitleEditClick} className="shrink-0">
-              <Edit2 className="h-4 w-4" />
-            </Button>
-          )}
+          {selectedConversationId && !isEditingTitle && (<Button variant="ghost" size="icon" onClick={() => setIsEditingTitle(true)} className="shrink-0"><Edit2 className="h-4 w-4" /></Button>)}
         </div>
         <div className="flex items-center gap-2 pr-2">
           {selectedConversationId && (
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                  <Trash2 className="h-5 w-5" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete this
-                    conversation and all of its messages.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteCurrentConversation} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
+              <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="h-5 w-5" /></Button></AlertDialogTrigger>
+              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete this conversation and all of its messages.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCurrentConversation} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
             </AlertDialog>
           )}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <User className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/settings')}>
-                <SettingsIcon className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleSignOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><User className="h-5 w-5" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end"><DropdownMenuLabel>My Account</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => navigate('/settings')}><SettingsIcon className="mr-2 h-4 w-4" /><span>Settings</span></DropdownMenuItem><DropdownMenuItem onClick={handleSignOut}><LogOut className="mr-2 h-4 w-4" /><span>Log out</span></DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
         </div>
       </header>
-
       {isMobile ? (
         <div className="flex-1 overflow-hidden">{mainContent}</div>
       ) : (
         <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
-          {isSidebarOpen && (
-            <>
-              <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-                {sidebarContent}
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-            </>
-          )}
-          <ResizablePanel>
-            {mainContent}
-          </ResizablePanel>
+          {isSidebarOpen && (<><ResizablePanel defaultSize={20} minSize={15} maxSize={30}>{sidebarContent}</ResizablePanel><ResizableHandle withHandle /></>)}
+          <ResizablePanel>{mainContent}</ResizablePanel>
         </ResizablePanelGroup>
       )}
     </div>

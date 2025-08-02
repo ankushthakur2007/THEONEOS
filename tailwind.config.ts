@@ -87,40 +87,26 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
         "pulse-glow": {
-            "0%, 100%": {
-                transform: "scale(1)",
-                boxShadow: "0 0 0 0px hsl(var(--primary) / 0.5)",
-            },
-            "50%": {
-                transform: "scale(1.05)",
-                boxShadow: "0 0 40px 15px hsl(var(--primary) / 0)",
-            },
+          "0%, 100%": {
+            transform: "scale(1)",
+            boxShadow: "0 0 0 0px hsl(var(--primary) / 0.5)",
+          },
+          "50%": {
+            transform: "scale(1.05)",
+            boxShadow: "0 0 40px 15px hsl(var(--primary) / 0)",
+          },
         },
-        "wave": {
-            "0%": { transform: "scale(0.8)", opacity: "0" },
-            "50%": { opacity: "1" },
-            "100%": { transform: "scale(1.5)", opacity: "0" },
-        },
-        "rotate-complex": {
-            "0%": { transform: "rotate3d(1, 1, 1, 0deg) scale(1)" },
-            "50%": { transform: "rotate3d(2, 0.5, -1, 180deg) scale(1.1)" },
-            "100%": { transform: "rotate3d(1, 1, 1, 360deg) scale(1)" },
+        "slide-up-fade": {
+          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "fade-in": {
           from: { opacity: "0", transform: "translateY(8px)" },
@@ -131,9 +117,7 @@ export default {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-glow": "pulse-glow 4s infinite ease-in-out",
-        "wave": "wave 2s infinite ease-out",
-        "rotate-complex": "rotate-complex 5s linear infinite",
-        "fade-in": "fade-in 0.4s ease-out",
+        "slide-up-fade": "slide-up-fade 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
       },
     },
   },

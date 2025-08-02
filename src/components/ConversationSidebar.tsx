@@ -39,21 +39,17 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
         .eq('user_id', session.user.id)
         .order('updated_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching conversations:', error);
-      } else {
-        setConversations(data || []);
-      }
+      if (error) console.error('Error fetching conversations:', error);
+      else setConversations(data || []);
       setLoading(false);
     };
-
     fetchConversations();
   }, [session, supabase, refreshKey]);
 
   return (
-    <div className="h-full flex flex-col bg-secondary/50">
+    <div className="h-full flex flex-col bg-muted/40">
       <div className="p-2 border-b">
-        <Button onClick={onNewChat} className="w-full justify-start">
+        <Button onClick={onNewChat} className="w-full justify-start h-10 text-base">
           <PlusCircle className="mr-2 h-4 w-4" />
           New Chat
         </Button>
@@ -61,24 +57,23 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
           {loading ? (
-            Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))
+            Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />)
           ) : (
             conversations.map((conv) => (
-              <Button
+              <button
                 key={conv.id}
-                variant="ghost"
                 className={cn(
-                  'w-full justify-start h-auto py-2 text-left',
-                  selectedConversationId === conv.id && 'bg-primary/10 text-primary'
+                  'w-full text-left px-3 py-2 rounded-lg transition-colors duration-200',
+                  selectedConversationId === conv.id
+                    ? 'bg-primary/10 text-primary font-semibold'
+                    : 'hover:bg-primary/5'
                 )}
                 onClick={() => onSelectConversation(conv.id)}
               >
-                <span className="truncate block">
+                <span className="truncate block text-sm">
                   {conv.title || 'Untitled Chat'}
                 </span>
-              </Button>
+              </button>
             ))
           )}
         </div>
