@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { useSession } from '@/components/SessionContextProvider';
+import { ThinkingIndicator } from './ThinkingIndicator';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
@@ -104,7 +105,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoadin
                         )}
                       </div>
                     )}
-                    <MarkdownRenderer content={msg.parts[0].text || '...'} invertInDarkMode={msg.role !== 'user'} />
+                    
+                    {msg.role === 'model' && !msg.parts[0].text ? (
+                      <ThinkingIndicator />
+                    ) : (
+                      <MarkdownRenderer content={msg.parts[0].text} invertInDarkMode={msg.role !== 'user'} />
+                    )}
+
                     {msg.role === 'model' && msg.parts[0].text && (
                       <div className="flex items-center gap-1 mt-2 text-muted-foreground/60">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopy(msg.parts[0].text)}><Copy className="h-3.5 w-3.5" /></Button>
