@@ -82,10 +82,10 @@ export function useAIInteraction(
       const uploadToast = toast.loading("Uploading file...");
       try {
         const filePath = `${session.user.id}/${Date.now()}-${file.name}`;
-        const { error: uploadError } = await supabase.storage.from('file_uploads').upload(filePath, file);
+        const { error: uploadError } = await supabase.storage.from('fileuploads').upload(filePath, file);
         if (uploadError) throw new Error(`Storage error: ${uploadError.message}`);
         
-        const { data: urlData } = supabase.storage.from('file_uploads').getPublicUrl(filePath);
+        const { data: urlData } = supabase.storage.from('fileuploads').getPublicUrl(filePath);
         fileUrl = urlData.publicUrl;
 
         fileData = await toBase64(file);
