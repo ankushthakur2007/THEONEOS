@@ -228,7 +228,7 @@ serve(async (req) => {
               console.log(`Invoking 'searchWithSerper' function with query: "${query}"`);
               
               console.log("--- [BEFORE INVOKE] ---");
-              const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('searchWithSerper', { body: { query } });
+              const { data: searchData, error: searchError } = await supabaseAdmin.functions.invoke('searchWithSerper', { body: JSON.stringify({ query }) });
               console.log("--- [AFTER INVOKE] ---");
 
               if (searchError) {
