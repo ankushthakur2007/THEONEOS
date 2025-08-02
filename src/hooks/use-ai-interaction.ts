@@ -6,15 +6,23 @@ export interface ChatMessage {
   id?: string;
   role: 'user' | 'model';
   parts: { text: string }[];
+  fileUrl?: string | null;
 }
 
 interface UseAIInteractionReturn {
-  processUserInput: (text: string) => Promise<{ text: string }>;
+  processUserInput: (text: string, file?: File | null) => Promise<{ text: string }>;
   isThinkingAI: boolean;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   isLoadingHistory: boolean;
 }
+
+const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = () => resolve((reader.result as string).split(',')[1]);
+  reader.onerror = error => reject(error);
+});
 
 export function useAIInteraction(
   supabase: SupabaseClient,
@@ -36,7 +44,7 @@ export function useAIInteraction(
     setIsLoadingHistory(true);
     const { data: messagesData, error: messagesError } = await supabase
       .from('messages')
-      .select('id, role, content')
+      .select('id, role, content, metadata')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true });
     
@@ -48,6 +56,7 @@ export function useAIInteraction(
         id: msg.id,
         role: msg.role as 'user' | 'model',
         parts: [{ text: msg.content }],
+        fileUrl: (msg.metadata as any)?.fileUrl || null,
       }));
       setMessages(formattedMessages);
     }
@@ -58,14 +67,38 @@ export function useAIInteraction(
     fetchMessages(conversationId);
   }, [session?.user?.id, conversationId, fetchMessages]);
 
-  const processUserInput = useCallback(async (text: string): Promise<{ text: string }> => {
+  const processUserInput = useCallback(async (text: string, file: File | null = null): Promise<{ text: string }> => {
     if (!session) {
         toast.error("You must be logged in to chat.");
         throw new Error("User not authenticated");
     }
     setIsThinkingAI(true);
 
-    const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }] };
+    let fileUrl: string | null = null;
+    let fileData: string | null = null;
+    let fileMimeType: string | null = null;
+
+    if (file) {
+      const uploadToast = toast.loading("Uploading file...");
+      try {
+        const filePath = `${session.user.id}/${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage.from('file_uploads').upload(filePath, file);
+        if (uploadError) throw new Error(`Storage error: ${uploadError.message}`);
+        
+        const { data: urlData } = supabase.storage.from('file_uploads').getPublicUrl(filePath);
+        fileUrl = urlData.publicUrl;
+
+        fileData = await toBase64(file);
+        fileMimeType = file.type;
+        toast.success("File uploaded successfully!", { id: uploadToast });
+      } catch (error: any) {
+        toast.error(`File upload failed: ${error.message}`, { id: uploadToast });
+        setIsThinkingAI(false);
+        throw error;
+      }
+    }
+
+    const newUserMessage: ChatMessage = { role: 'user', parts: [{ text }], fileUrl };
     setMessages(prev => [...prev, newUserMessage, { role: 'model', parts: [{ text: '' }] }]);
 
     try {
@@ -75,7 +108,12 @@ export function useAIInteraction(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ prompt: text, conversationId }),
+        body: JSON.stringify({ 
+          prompt: text, 
+          conversationId,
+          file: fileData ? { data: fileData, mimeType: fileMimeType } : null,
+          fileUrl,
+        }),
       });
 
       if (!response.ok || !response.body) {
@@ -109,7 +147,6 @@ export function useAIInteraction(
         setConversationId(newConversationId);
       }
       
-      // Refetch messages to get proper IDs from the database
       await fetchMessages(newConversationId || conversationId);
 
       return { text: fullResponse };
