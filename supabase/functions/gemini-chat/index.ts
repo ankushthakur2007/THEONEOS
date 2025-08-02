@@ -82,10 +82,11 @@ serve(async (req) => {
   console.log("--- [GEMINI-CHAT START] ---");
 
   try {
-    const { prompt, conversationId: initialConversationId } = await req.json();
+    const { prompt, conversationId: initialConversationId, file, fileUrl } = await req.json();
     conversationId = initialConversationId;
     console.log(`Initial Conversation ID: ${conversationId}`);
     console.log(`User Prompt: "${prompt}"`);
+    if (file) console.log(`File attached: ${file.mimeType}`);
 
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiApiKey) throw new Error('Gemini API key not set.');
@@ -212,9 +213,24 @@ serve(async (req) => {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          await supabaseAdmin.from('messages').insert({ conversation_id: conversationId, role: 'user', content: prompt });
+          await supabaseAdmin.from('messages').insert({
+            conversation_id: conversationId,
+            role: 'user',
+            content: prompt,
+            metadata: fileUrl ? { fileUrl } : null,
+          });
 
-          const result = await chat.sendMessage(prompt);
+          const userPromptParts: Part[] = [{ text: prompt }];
+          if (file && file.data && file.mimeType) {
+            userPromptParts.push({
+              inlineData: {
+                data: file.data,
+                mimeType: file.mimeType,
+              },
+            });
+          }
+
+          const result = await chat.sendMessage(userPromptParts);
           const response = result.response;
           console.log("--- GEMINI RAW RESPONSE ---\n" + JSON.stringify(response, null, 2));
           

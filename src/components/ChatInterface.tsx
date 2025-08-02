@@ -93,6 +93,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoadin
                       ? 'bg-primary text-primary-foreground rounded-br-lg'
                       : 'bg-muted text-foreground rounded-bl-lg'
                   )}>
+                    {msg.role === 'user' && msg.fileUrl && (
+                      <div className="mb-2">
+                        {msg.fileUrl.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                          <img src={msg.fileUrl} alt="Uploaded content" className="rounded-lg max-w-full h-auto" />
+                        ) : (
+                          <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="block underline text-white">
+                            View Attached File
+                          </a>
+                        )}
+                      </div>
+                    )}
                     <MarkdownRenderer content={msg.parts[0].text || '...'} invertInDarkMode={msg.role !== 'user'} />
                     {msg.role === 'model' && msg.parts[0].text && (
                       <div className="flex items-center gap-1 mt-2 text-muted-foreground/60">
