@@ -85,7 +85,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   return (
     <>
       <ScrollArea className="w-full flex-grow">
-        <div className="p-4 space-y-6 max-w-3xl mx-auto w-full">
+        <div className="p-4 space-y-2 max-w-3xl mx-auto w-full">
           {isLoadingHistory ? (
             <div className="space-y-4">
               <Skeleton className="h-16 w-3/4 animate-pulse" />
@@ -106,10 +106,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               >
                 <div
                   className={cn(
-                    'p-3 rounded-lg max-w-sm md:max-w-md lg:max-w-2xl',
+                    'p-3 rounded-2xl max-w-sm md:max-w-md lg:max-w-2xl',
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
+                      : 'bg-muted text-muted-foreground'
                   )}
                 >
                   <MarkdownRenderer
@@ -117,7 +117,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     invertInDarkMode={msg.role !== 'user'}
                   />
                   {msg.role === 'model' && msg.parts[0].text && (
-                    <div className="flex items-center gap-1 mt-2 text-muted-foreground">
+                    <div className="flex items-center gap-1 mt-2 text-muted-foreground/80">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(msg.parts[0].text)}>
                         <Copy className="h-4 w-4" />
                       </Button>

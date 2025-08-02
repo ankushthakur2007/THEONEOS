@@ -237,14 +237,14 @@ const Home: React.FC = () => {
   );
 
   const mainContent = (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-background">
       <main className="flex-1 flex flex-col overflow-hidden">
         {messages.length === 0 && !isThinking ? (
           <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
-            <h1 className="text-5xl font-bold mb-4 text-primary">
-              THEONEOS
-            </h1>
-            <p className="text-xl text-muted-foreground">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6 animate-pulse-glow">
+              <h1 className="text-4xl font-bold text-primary">J</h1>
+            </div>
+            <p className="text-2xl font-medium text-foreground">
               How can I help you today, {profile?.first_name || 'there'}?
             </p>
           </div>
@@ -257,7 +257,7 @@ const Home: React.FC = () => {
         )}
       </main>
 
-      <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 bg-background">
+      <footer className="p-4 w-full max-w-3xl mx-auto shrink-0 bg-transparent">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleTextSubmit)} className="relative">
             <FormField
@@ -268,7 +268,7 @@ const Home: React.FC = () => {
                   <FormControl>
                     <TextareaAutosize
                       placeholder="Message JARVIS..."
-                      className="w-full rounded-2xl p-4 pr-24 resize-none bg-muted border-muted-foreground/20 focus-visible:ring-primary"
+                      className="w-full rounded-2xl p-4 pr-24 resize-none bg-muted border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       {...field}
                       disabled={isThinking || isListening}
                       autoComplete="off"
@@ -284,9 +284,9 @@ const Home: React.FC = () => {
                 </FormItem>
               )}
             />
-            <div className="absolute right-3 bottom-3 flex items-center gap-1">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
               <Button type="button" size="icon" variant="ghost" onClick={handleMicClick} disabled={isThinking}>
-                <Mic className={isListening ? "text-red-500" : ""} />
+                <Mic className={isListening ? "text-red-500 animate-pulse" : ""} />
               </Button>
               <Button type="submit" size="icon" variant="ghost" disabled={isThinking || isListening || !form.watch('message')}>
                 <Send />
@@ -300,7 +300,7 @@ const Home: React.FC = () => {
 
   return (
     <div className="flex flex-col h-dvh bg-background text-foreground animate-fade-in">
-      <header className="p-4 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b">
+      <header className="p-2 flex justify-between items-center z-10 bg-background/80 backdrop-blur-sm shrink-0 border-b sticky top-0">
         <div className="flex items-center gap-2 min-w-0">
           {isMobile ? (
             <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
@@ -309,7 +309,7 @@ const Home: React.FC = () => {
                   <PanelLeftOpen />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-80">
+              <SheetContent side="left" className="p-0 w-80 bg-background/95 backdrop-blur-sm">
                 <SheetHeader>
                   <SheetTitle className="p-4 text-left text-lg font-semibold tracking-tight">Conversations</SheetTitle>
                 </SheetHeader>
@@ -337,11 +337,11 @@ const Home: React.FC = () => {
                   setConversationTitle(originalTitle);
                 }
               }}
-              className="h-9 text-xl font-bold"
+              className="h-9 text-lg font-semibold bg-transparent"
               autoFocus
             />
           ) : (
-            <h1 className="text-xl font-bold truncate" title={conversationTitle}>
+            <h1 className="text-lg font-semibold truncate" title={conversationTitle}>
               {conversationTitle}
             </h1>
           )}
@@ -352,7 +352,7 @@ const Home: React.FC = () => {
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pr-2">
           {selectedConversationId && (
             <AlertDialog>
               <AlertDialogTrigger asChild>

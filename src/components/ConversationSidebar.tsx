@@ -51,7 +51,7 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
   }, [session, supabase, refreshKey]);
 
   return (
-    <div className="h-full flex flex-col bg-muted/50">
+    <div className="h-full flex flex-col bg-secondary/50">
       <div className="p-2 border-b">
         <Button onClick={onNewChat} className="w-full justify-start">
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -70,12 +70,12 @@ export const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
                 key={conv.id}
                 variant="ghost"
                 className={cn(
-                  'w-full justify-start h-auto py-2',
-                  selectedConversationId === conv.id && 'bg-accent text-accent-foreground'
+                  'w-full justify-start h-auto py-2 text-left',
+                  selectedConversationId === conv.id && 'bg-primary/10 text-primary'
                 )}
                 onClick={() => onSelectConversation(conv.id)}
               >
-                <span className="truncate block text-left">
+                <span className="truncate block">
                   {conv.title || 'Untitled Chat'}
                 </span>
               </Button>

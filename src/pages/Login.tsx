@@ -55,8 +55,7 @@ const Login: React.FC = () => {
         toast.error(`Sign up failed: ${error.message}`);
       } else if (data.user) {
         toast.success('Sign up successful! Please check your email to verify your account.');
-        // Optionally redirect or show a message to verify email
-        navigate('/home', { replace: true }); // Redirect to home after sign up
+        navigate('/home', { replace: true });
       }
     } else {
       const { email, password } = values as LoginFormValues;
@@ -69,22 +68,25 @@ const Login: React.FC = () => {
         toast.error(`Sign in failed: ${error.message}`);
       } else {
         toast.success('Signed in successfully!');
-        navigate('/home', { replace: true }); // Redirect to home after sign in
+        navigate('/home', { replace: true });
       }
     }
   };
 
-  // Reset form fields when switching between sign-in/sign-up
   React.useEffect(() => {
     form.reset();
   }, [isSignUp, form.reset]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4 animate-fade-in">
-      <Card className="w-full max-w-md p-6 space-y-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 animate-fade-in">
+      <div className="text-center mb-8">
+        <h1 className="text-5xl font-bold text-primary">J</h1>
+        <p className="text-muted-foreground">Welcome to THEONEOS</p>
+      </div>
+      <Card className="w-full max-w-sm p-2">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">THEONEOS</CardTitle>
-          <CardDescription>{isSignUp ? 'Create an account' : 'Sign in to your account'}</CardDescription>
+          <CardTitle className="text-2xl font-semibold">{isSignUp ? 'Create an Account' : 'Sign In'}</CardTitle>
+          <CardDescription>Enter your details below to continue.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>

@@ -86,38 +86,38 @@ const Settings: React.FC = () => {
   return (
     <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8 animate-fade-in">
       <div className="max-w-2xl mx-auto">
-        <Button variant="ghost" onClick={() => navigate('/home')} className="mb-4">
+        <Button variant="ghost" onClick={() => navigate('/home')} className="mb-4 -ml-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Home
         </Button>
-        <Card>
+        <Card className="bg-card">
           <CardHeader>
             <CardTitle>Settings</CardTitle>
             <CardDescription>Manage your profile and application settings.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8">
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Profile</h3>
               {loading ? (
-                <div className="space-y-2">
+                <div className="space-y-2 pt-2">
                   <Skeleton className="h-6 w-1/2 animate-pulse" />
                   <Skeleton className="h-6 w-1/3 animate-pulse" />
                 </div>
               ) : profile ? (
-                <div className="space-y-1">
+                <div className="space-y-1 text-sm text-muted-foreground pt-2">
                   <p><strong>Name:</strong> {profile.first_name} {profile.last_name}</p>
                   <p><strong>Email:</strong> {session?.user?.email}</p>
                 </div>
               ) : (
-                <p>Could not load profile information.</p>
+                <p className="text-sm text-muted-foreground pt-2">Could not load profile information.</p>
               )}
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-4">
               <h3 className="text-lg font-medium">Appearance</h3>
               <div className="flex items-center justify-between rounded-lg border p-4">
                 <div className="space-y-0.5">
-                  <Label htmlFor="theme-switch" className="text-base">Dark Mode</Label>
+                  <Label htmlFor="theme-switch" className="font-medium">Dark Mode</Label>
                   <p className="text-sm text-muted-foreground">
                     Toggle between light and dark themes.
                   </p>
@@ -132,16 +132,16 @@ const Settings: React.FC = () => {
 
             <div className="space-y-4">
               <h3 className="text-lg font-medium">AI Customization</h3>
-              <div className="rounded-lg border p-4 space-y-4">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="ai-personality">AI Personality</Label>
+                  <Label htmlFor="ai-personality" className="font-medium">AI Personality</Label>
                   <p className="text-sm text-muted-foreground">
                     Describe how you want JARVIS to respond. Keep it brief (max 500 characters).
                   </p>
                   {loading ? (
-                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full mt-2" />
                   ) : (
-                    <div>
+                    <div className="pt-2">
                       <Textarea
                         id="ai-personality"
                         placeholder="e.g., A witty and slightly sarcastic assistant, like Chandler from Friends."
