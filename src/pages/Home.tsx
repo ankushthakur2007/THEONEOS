@@ -153,7 +153,7 @@ const Home: React.FC = () => {
             <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mb-6 animate-pulse-glow">
               <h1 className="text-5xl font-bold text-primary tracking-tighter">J</h1>
             </div>
-            <p className="text-3xl font-medium text-foreground">How can I help you today?</p>
+            <p className="text-3xl font-medium text-foreground">How can I help you today, {profile?.first_name || 'friend'}?</p>
           </div>
         ) : (
           <ChatInterface messages={messages} isLoadingHistory={isLoadingHistory} conversationId={selectedConversationId} />
